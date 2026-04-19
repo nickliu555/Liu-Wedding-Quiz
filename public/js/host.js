@@ -423,10 +423,110 @@
     });
   }
 
+  // Synthesized drumroll: a rapid stream of low filtered-noise hits with a
+  // crescendo. Used during the suspense beats before each podium reveal.
+  // Returns a stop() function so the caller can cut it off precisely on the
+  // reveal beat. durationSec is the target length of the roll.
+  //
+  // If /assets/sounds/drumroll.mp3 is available, we prefer the real
+  // recording (capped to the first `durationSec` so the file's "tada" tail
+  // is never heard). Falls back to the synth if the file is missing.
+  const drumrollAudio = new Audio('/assets/sounds/drumroll.mp3');
+  drumrollAudio.preload = 'auto';
+  drumrollAudio.volume = 0.85;
+  let drumrollFileAvailable = null;
+  // `canplaythrough` is the strictest signal but isn't fired by all browsers
+  // until much later (sometimes never). `loadeddata` fires as soon as the
+  // first frame of audio is decoded — that's enough for our 3s clip.
+  drumrollAudio.addEventListener('loadeddata',     function () { drumrollFileAvailable = true; });
+  drumrollAudio.addEventListener('canplaythrough', function () { drumrollFileAvailable = true; });
+  drumrollAudio.addEventListener('error',          function () { drumrollFileAvailable = false; });
+  // Kick off the load now (some browsers don't auto-fetch with preload alone).
+  try { drumrollAudio.load(); } catch (_) {}
+
+  function playDrumroll(durationSec) {
+    var dur = Math.max(0.4, durationSec || 1.2);
+    if (!soundOn) return function () {};
+    // Prefer the real recording if it's loaded enough to play. We check
+    // `readyState >= 2` (HAVE_CURRENT_DATA) at call time as a fallback, in
+    // case neither `loadeddata` nor `canplaythrough` fired yet.
+    var fileReady = drumrollFileAvailable === true || drumrollAudio.readyState >= 2;
+    if (fileReady && drumrollFileAvailable !== false) {
+      var stopped = false;
+      var cutoffTimer = null;
+      try {
+        drumrollAudio.currentTime = 0;
+        var p = drumrollAudio.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(function (err) {
+            // Transient errors (e.g. "play() interrupted by pause()" from
+            // the previous reveal) are common when reusing one <audio>
+            // element across multiple reveals. Don't permanently blacklist
+            // the file — just log and let subsequent reveals try again.
+            console.warn('[drumroll] file play failed for this beat:', err);
+          });
+        }
+      } catch (e) {
+        // Hard error — fall back to synth this time only.
+        return playDrumrollSynth(dur);
+      }
+      // Hard-stop after `dur` seconds so the trailing "tada" never plays.
+      cutoffTimer = setTimeout(function () {
+        try { drumrollAudio.pause(); drumrollAudio.currentTime = 0; } catch (_) {}
+      }, dur * 1000);
+      return function stop() {
+        if (stopped) return;
+        stopped = true;
+        if (cutoffTimer) { clearTimeout(cutoffTimer); cutoffTimer = null; }
+        try { drumrollAudio.pause(); drumrollAudio.currentTime = 0; } catch (_) {}
+      };
+    }
+    return playDrumrollSynth(dur);
+  }
+
+  function playDrumrollSynth(dur) {
+    var stopped = false;
+    var stoppers = [];
+    var ctx = getAudioCtx();
+    if (!ctx) return function () {};
+    if (ctx.state !== 'running') {
+      ctx.resume().catch(function () {});
+    }
+    var t0 = ctx.currentTime;
+    // ~22 hits per second, ramping from quiet to loud.
+    var hitsPerSec = 22;
+    var totalHits = Math.floor(dur * hitsPerSec);
+    for (var i = 0; i < totalHits; i++) {
+      var when = t0 + (i / hitsPerSec);
+      var progress = i / totalHits; // 0..1
+      var vol = 0.08 + progress * 0.35; // crescendo
+      // Build a tiny noise burst.
+      var bufferSize = Math.floor(ctx.sampleRate * 0.04);
+      var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      var data = buffer.getChannelData(0);
+      for (var s = 0; s < bufferSize; s++) data[s] = (Math.random() * 2 - 1) * (1 - s / bufferSize);
+      var src = ctx.createBufferSource();
+      src.buffer = buffer;
+      var filt = ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 220;
+      var gain = ctx.createGain();
+      gain.gain.value = vol;
+      src.connect(filt).connect(gain).connect(ctx.destination);
+      src.start(when);
+      src.stop(when + 0.05);
+      stoppers.push(src);
+    }
+    return function stop() {
+      if (stopped) return;
+      stopped = true;
+      stoppers.forEach(function (s) { try { s.stop(); } catch (_) {} });
+    };
+  }
+
   // Game-show "let's begin" stinger: 3-note rising fanfare (C5 -> E5 -> G5)
   // played in quick succession when the host starts the game.
-  function playStartFanfare() {
-    if (!soundOn) return;
+  function playStartFanfare() {    if (!soundOn) return;
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state !== 'running') {
@@ -564,6 +664,14 @@
       );
     }).join('');
 
+    // On the last question, hide the Top 5 entirely so the host doesn't
+    // spoil the podium reveal that's coming up next. Also collapse the
+    // grid to a single centered column so the bars aren't left-leaning.
+    var lbPanel = document.getElementById('leaderboardPanel');
+    var revealGrid = document.getElementById('revealGrid');
+    if (lbPanel) lbPanel.style.display = r.isLastQuestion ? 'none' : '';
+    if (revealGrid) revealGrid.classList.toggle('solo', !!r.isLastQuestion);
+
     // On the last question, swap the green "Next" button for the pink
     // accent style + a trophy so the host clearly sees the game is ending.
     if (r.isLastQuestion) {
@@ -582,36 +690,57 @@
   });
 
   // ---------------- Final ----------------
+  // Reveal flow (per podium spot, bottom-up: 3rd → 2nd → 1st):
+  //   1. Show suspense card with medal + animated dots ("🥉 Third place is...")
+  //   2. Drumroll plays during the suspense beat
+  //   3. Drumroll stops, name + cheer chord pop in
+  //   4. Score counter rolls up from 0 to final value
+  //   5. Pause, then move to next spot
+  // The 1st place reveal also triggers confetti + applause.
+  var SUSPENSE_MS = 3000;     // length of dots/drumroll per spot
+  var REVEAL_HOLD_MS = 1700;  // how long the revealed spot sits before next
+  var SCORE_ROLL_MS = 900;    // duration of the score count-up animation
+
   function renderFinal(f) {
     show('final');
 
-    // Podium: render 2nd, 1st, 3rd in that column order, reveal in 3-2-1
-    const p = f.podium;
-    const p1 = p[0], p2 = p[1], p3 = p[2];
+    // Brief "Now for the results…" intro before the podium reveal begins.
+    // Pure visual beat — silence helps the room turn its attention to the
+    // screen before the first drumroll fires.
+    var INTRO_MS = 3000;
+    var intro = document.getElementById('resultsIntro');
+    var finalView = document.querySelector('.final-view');
+    if (finalView) finalView.classList.add('pre-reveal');
+    if (intro) {
+      intro.classList.remove('hide');
+      // Trigger the fade-in on the next frame so the transition runs.
+      requestAnimationFrame(function () { intro.classList.add('show'); });
+    }
+    setTimeout(function () {
+      if (intro) { intro.classList.remove('show'); intro.classList.add('hide'); }
+      // Wait for the fade-out transition to fully complete (matches the
+      // 0.6s opacity transition on .results-intro) before swapping the
+      // podium in, so the two views don't overlap.
+      setTimeout(function () {
+        if (finalView) finalView.classList.remove('pre-reveal');
+        runPodiumReveal(f);
+      }, 650);
+    }, INTRO_MS);
+  }
+
+  function runPodiumReveal(f) {
+    var p = f.podium || [];
+    var p1 = p[0], p2 = p[1], p3 = p[2];
+
+    // DOM order: 2nd, 1st, 3rd (so 1st is centered visually).
     podium.innerHTML =
       podiumCell('place-2', '🥈', p2) +
       podiumCell('place-1', '🥇', p1) +
       podiumCell('place-3', '🥉', p3);
 
-    const steps = podium.querySelectorAll('.podium-step');
-    // Reveal order: 3rd (index 2 in DOM), 2nd (index 0), 1st (index 1)
-    const order = [steps[2], steps[0], steps[1]];
-    const tiers = [3, 2, 1]; // matches reveal order
-    let delay = 400;
-    order.forEach(function (el, i) {
-      if (!el) return;
-      setTimeout(function () {
-        el.classList.add('visible');
-        // Triumphant chord on each placement reveal — gets bigger each time.
-        playCheerChord(tiers[i]);
-        if (i === 2) {
-          // 1st place — big celebration: confetti + crowd applause.
-          confettiBurst();
-          playApplause(4);
-        }
-      }, delay + i * 900);
-    });
-
+    // Render the full leaderboard but keep it hidden until after the
+    // winner has been announced — otherwise the rest of the standings
+    // spoil the podium reveal.
     fullLb.innerHTML =
       '<h3 class="serif" style="margin-top:0;">Full scores</h3>' +
       (f.fullLeaderboard || []).map(function (e) {
@@ -623,6 +752,117 @@
           '</div>'
         );
       }).join('');
+    fullLb.classList.remove('visible');
+
+    var steps = podium.querySelectorAll('.podium-step');
+    // [DOM 2nd, DOM 1st, DOM 3rd] — reveal order is 3rd, 2nd, 1st.
+    var revealQueue = [
+      { el: steps[2], entry: p3, tier: 3, label: 'Third place is…',  isWinner: false },
+      { el: steps[0], entry: p2, tier: 2, label: 'Second place is…', isWinner: false },
+      { el: steps[1], entry: p1, tier: 1, label: 'And the winner is…', isWinner: true  },
+    ];
+
+    // Pre-set each podium step to its "suspense" state: visible card with
+    // medal + dots, no name/score yet. The .visible class makes the card
+    // fade in with the slide-up transition.
+    revealQueue.forEach(function (slot) {
+      if (!slot.el) return;
+      slot.el.classList.add('suspense');
+      var nameEl = slot.el.querySelector('.name');
+      var scoreEl = slot.el.querySelector('.score');
+      if (nameEl) {
+        nameEl.dataset.finalName = nameEl.textContent;
+        nameEl.innerHTML = '<span class="suspense-label">' + slot.label + '</span><span class="suspense-dots"><span></span><span></span><span></span></span>';
+      }
+      if (scoreEl) {
+        scoreEl.dataset.finalScore = (slot.entry && slot.entry.score) || 0;
+        scoreEl.textContent = '';
+      }
+    });
+
+    var cursor = 400;
+    revealQueue.forEach(function (slot, i) {
+      if (!slot.el || !slot.entry) return;
+
+      // 1. Card slides in + drumroll begins. Winner's drumroll runs longer
+      //    so it covers the score climb + tension hold without a silent
+      //    gap — but capped just under 4s so the mp3's cymbal crash near
+      //    its tail doesn't fire mid-reveal.
+      var WINNER_SCORE_MS = 700;   // shorter score climb for the winner
+      var WINNER_HOLD_MS  = 300;   // brief beat between score lock + name
+      var rollDur = slot.isWinner
+        ? (SUSPENSE_MS + WINNER_SCORE_MS + WINNER_HOLD_MS) / 1000
+        : SUSPENSE_MS / 1000;
+      setTimeout(function () {
+        slot.el.classList.add('visible');
+        var stopRoll = playDrumroll(rollDur);
+        // 2. After suspense, reveal in two beats for the winner (score
+        //    first, then name) for a classic "with 4,200 points… NICK!"
+        //    moment. 2nd/3rd reveal name+score together to keep the
+        //    sequence snappy.
+        setTimeout(function () {
+          var nameEl = slot.el.querySelector('.name');
+          var scoreEl = slot.el.querySelector('.score');
+          var finalScore = scoreEl ? parseInt(scoreEl.dataset.finalScore || '0', 10) : 0;
+
+          if (slot.isWinner) {
+            // Roll the score up while the name stays as suspense dots.
+            // Drumroll keeps going underneath — no silent gap.
+            if (scoreEl) {
+              scoreEl.classList.add('rolling');
+              animateScoreCount(scoreEl, finalScore, WINNER_SCORE_MS);
+            }
+            // After the score lands + a brief hold, reveal the name.
+            setTimeout(function () {
+              if (scoreEl) scoreEl.classList.remove('rolling');
+              if (typeof stopRoll === 'function') stopRoll();
+              if (nameEl) {
+                nameEl.textContent = nameEl.dataset.finalName || (slot.entry.name || '');
+                nameEl.classList.add('revealed');
+              }
+              slot.el.classList.remove('suspense');
+              slot.el.classList.add('revealed');
+              playCheerChord(slot.tier);
+              confettiBurst();
+              playApplause(4);
+              // Now the full standings can come up — they no longer spoil
+              // anything since the winner is revealed.
+              setTimeout(function () { fullLb.classList.add('visible'); }, 600);
+            }, WINNER_SCORE_MS + WINNER_HOLD_MS);
+          } else {
+            if (typeof stopRoll === 'function') stopRoll();
+            if (nameEl) {
+              nameEl.textContent = nameEl.dataset.finalName || (slot.entry.name || '');
+              nameEl.classList.add('revealed');
+            }
+            slot.el.classList.remove('suspense');
+            slot.el.classList.add('revealed');
+            playCheerChord(slot.tier);
+            if (scoreEl) animateScoreCount(scoreEl, finalScore, SCORE_ROLL_MS);
+          }
+        }, SUSPENSE_MS);
+      }, cursor);
+
+      cursor += SUSPENSE_MS + REVEAL_HOLD_MS;
+      // Winner gets the extra score-roll + hold beat before the name pop.
+      if (slot.isWinner) cursor += WINNER_SCORE_MS + WINNER_HOLD_MS;
+    });
+  }
+
+  // Counts up an integer in `el` from 0 to `to` over `durationMs`. Suffixed
+  // with " pts" to match the static format used elsewhere on the podium.
+  // Uses an ease-out so the climb feels alive, then settles.
+  function animateScoreCount(el, to, durationMs) {
+    var start = performance.now();
+    function step(now) {
+      var t = Math.min(1, (now - start) / durationMs);
+      // Ease-out cubic for a satisfying decel.
+      var eased = 1 - Math.pow(1 - t, 3);
+      var v = Math.round(eased * to);
+      el.textContent = v + ' pts';
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
 
   function podiumCell(klass, medal, entry) {

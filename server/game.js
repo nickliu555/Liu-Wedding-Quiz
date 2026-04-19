@@ -277,6 +277,7 @@ class Game {
       totalScore: p.score,
       rank: rank || lb.length,
       totalPlayers: lb.length,
+      isLastQuestion: this.currentIndex === this.questions.length - 1,
     };
   }
 

@@ -24,12 +24,12 @@
     },
     {
       "id": "q3",
-      "prompt": "Which did they take their first trip to together?",
+      "prompt": "Where did they take their first trip to together?",
       "choices": [
-        "Los Angeles",
+        "California",
         "Florida",
         "New York",
-        "Tokyo"
+        "Japan"
       ],
       "correctIndex": 1,
       "timeLimitSec": 20

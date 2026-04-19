@@ -197,6 +197,13 @@ body.host {
   display: grid; grid-template-columns: 1.2fr 1fr; gap: 30px;
   max-width: 1300px; margin: 0 auto;
 }
+/* On the final question we hide the Top 5 to avoid spoiling the podium
+   reveal — collapse to a single centered column so the answer
+   distribution doesn't sit awkwardly off to the left. */
+.reveal-grid.solo {
+  grid-template-columns: minmax(0, 720px);
+  justify-content: center;
+}
 .bars {
   background: var(--surface); border-radius: var(--radius); padding: 20px;
   box-shadow: var(--shadow);
@@ -257,6 +264,28 @@ body.host {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;
   align-items: end; max-width: 900px; margin: 0 auto 30px;
 }
+
+/* "Now for the results..." intro shown for ~2 seconds before the podium
+   reveal begins. Fades in/out via the .show / .hide classes set in JS. */
+.results-intro {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: clamp(36px, 5vw, 64px);
+  color: var(--ink, #2c2725);
+  text-align: center;
+  margin: 40px auto 30px;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.results-intro.show { opacity: 1; transform: translateY(0); }
+.results-intro.hide { opacity: 0; transform: translateY(-8px); }
+/* When the intro is showing, hide the podium completely so it doesn't
+   peek through underneath. */
+.final-view.pre-reveal h2,
+.final-view.pre-reveal .podium,
+.final-view.pre-reveal .full-lb { display: none; }
 .podium-step {
   background: var(--surface); border-radius: var(--radius); padding: 24px 16px;
   box-shadow: var(--shadow-strong);
@@ -267,14 +296,77 @@ body.host {
 .podium-step .medal { font-size: 52px; }
 .podium-step .name  { font-family: var(--font-serif); font-size: 28px; margin: 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .podium-step .score { color: var(--green-deep); font-weight: 700; font-size: 22px; }
+/* While the winner's score is climbing, give it a subtle pulse + warm glow
+   so the room feels the energy building. */
+.podium-step .score.rolling {
+  animation: scoreRoll 0.45s ease-in-out infinite alternate;
+  text-shadow: 0 0 12px rgba(232, 92, 122, 0.45);
+}
+@keyframes scoreRoll {
+  from { transform: scale(1); }
+  to   { transform: scale(1.12); }
+}
 .podium-step.place-1 { background: linear-gradient(180deg, #fff 0%, #fff6db 100%); padding-top: 36px; }
 .podium-step.place-2 { background: linear-gradient(180deg, #fff 0%, #f5efea 100%); }
 .podium-step.place-3 { background: linear-gradient(180deg, #fff 0%, #fbeef0 100%); }
+
+/* Suspense / reveal animations for the final podium reveal. */
+.podium-step .suspense-label {
+  display: block;
+  font-size: 18px;
+  color: var(--ink-soft, #8a8580);
+  font-family: var(--font-serif);
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+.podium-step .suspense-dots {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 8px;
+  height: 12px;
+  align-items: center;
+}
+.podium-step .suspense-dots span {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink-soft, #8a8580);
+  opacity: 0.3;
+  animation: dotBlink 1s infinite ease-in-out;
+}
+.podium-step .suspense-dots span:nth-child(2) { animation-delay: 0.18s; }
+.podium-step .suspense-dots span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes dotBlink {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50%      { opacity: 1;    transform: translateY(-3px); }
+}
+/* Pop the name in when revealed. */
+.podium-step .name.revealed {
+  animation: namePop 0.5s cubic-bezier(.2,1.4,.4,1);
+}
+@keyframes namePop {
+  0%   { transform: scale(0.7); opacity: 0; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+/* Whole step gets a soft pink/gold glow once revealed. */
+.podium-step.revealed.place-1 { box-shadow: 0 0 0 3px var(--gold, #C9A96E), var(--shadow-strong); }
+.podium-step.revealed.place-2 { box-shadow: 0 0 0 3px #d6c8b8, var(--shadow-strong); }
+.podium-step.revealed.place-3 { box-shadow: 0 0 0 3px var(--pink-soft, #f0c5d0), var(--shadow-strong); }
 
 .full-lb {
   max-width: 700px; margin: 0 auto; background: var(--surface); border-radius: var(--radius);
   padding: 20px; box-shadow: var(--shadow); text-align: left;
   max-height: 45vh; overflow-y: auto;
+  /* Hidden until the winner has been revealed so the rest of the
+     standings don't spoil the podium reveal. */
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  pointer-events: none;
+}
+.full-lb.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 /* Confetti */

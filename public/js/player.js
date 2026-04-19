@@ -98,7 +98,11 @@
         (res.answered
           ? '<div class="result-points ' + klass + '">+' + pts + '</div>'
           : '<p>No answer recorded.</p>') +
-        '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>' +
+        // Hide the rank on the very last question — the host's podium reveal
+        // is about to drop and we don't want to spoil the standings.
+        (res.isLastQuestion
+          ? '<p class="result-rank">Final results coming up on the big screen…</p>'
+          : '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>') +
       '</div>';
   }
 
