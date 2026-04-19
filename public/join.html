@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Join the Quiz · Liu Wedding</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/player.css" />
+</head>
+<body class="join">
+  <div class="join-header">
+    <div class="brand">Carly <span class="amp">&</span> Nick</div>
+    <h1 class="serif" style="margin: 10px 0 4px;">Wedding Quiz</h1>
+    <p>Enter your name to join the game</p>
+  </div>
+
+  <form id="joinForm" class="join-form" autocomplete="off">
+    <label for="nameInput">Your name</label>
+    <input id="nameInput" type="text" maxlength="20" autocapitalize="words" placeholder="e.g. Tim" required />
+    <button type="submit" class="btn-primary">Join</button>
+    <div id="errorMsg" class="error-msg" aria-live="polite"></div>
+  </form>
+
+  <!-- Decorative rose garland anchored above the credit footer -->
+  <div class="vines-top vines-bottom-anchor" aria-hidden="true"></div>
+
+  <footer class="credit-footer">Developed by Nick Liu (with help from Claude)</footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/join.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "questions": [
+    {
+      "id": "q1",
+      "prompt": "Where did the couple first meet?",
+      "choices": [
+        "At a coffee shop",
+        "Through mutual friends",
+        "At university",
+        "On a dating app"
+      ],
+      "correctIndex": 3
+    },
+    {
+      "id": "q2",
+      "prompt": "What is the couple's favorite shared hobby?",
+      "choices": [
+        "Hiking",
+        "Cooking together",
+        "Board games",
+        "Dancing"
+      ],
+      "correctIndex": 2
+    },
+    {
+      "id": "q3",
+      "prompt": "Which did they take their first trip to together?",
+      "choices": [
+        "Los Angeles",
+        "Florida",
+        "New York",
+        "Tokyo"
+      ],
+      "correctIndex": 1,
+      "timeLimitSec": 20
+    },
+    {
+      "id": "q4",
+      "prompt": "What was the name of their first pet together?",
+      "choices": [
+        "Kyushu",
+        "Biscuit",
+        "Luna",
+        "Pepper"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "id": "q5",
+      "prompt": "How many years have they been together before getting married?",
+      "choices": [
+        "1 year",
+        "2 years",
+        "3 years",
+        "4 years"
+      ],
+      "correctIndex": 2
+    }
+  ]
+}

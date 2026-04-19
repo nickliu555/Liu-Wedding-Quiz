@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Host · Liu Wedding Quiz</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/host.css" />
+</head>
+<body class="host">
+  <div class="host-shell">
+    <div class="host-topbar">
+      <div class="brand">Carly <span class="amp">&</span> Nick · Wedding Quiz</div>
+      <div class="controls">
+        <button id="musicBtn" class="btn-ghost" title="Toggle lobby music">♪ Music</button>
+        <button id="fullscreenBtn" class="btn-ghost">⛶ Fullscreen</button>
+        <button id="resetBtn" class="btn-ghost" title="Reset the whole game">Reset</button>
+      </div>
+    </div>
+
+    <!-- Decorative rose garland under the brand -->
+    <div class="vines-top" aria-hidden="true"></div>
+
+    <div class="host-main">
+      <!-- Lobby -->
+      <section class="view active" id="view-lobby">
+        <div class="lobby-grid">
+          <div class="qr-panel">
+            <h2 class="serif">Scan to join</h2>
+            <p>Point your phone camera at the code</p>
+            <img id="qrImg" alt="Join QR code" width="320" height="320" style="background:white; padding:12px; border-radius:14px; display:block; margin:0 auto;" />
+            <div class="join-url" id="joinUrl"></div>
+          </div>
+          <div class="players-panel">
+            <div class="header">
+              <h3 class="serif">Players</h3>
+              <div class="count" id="playerCount">0</div>
+            </div>
+            <div class="player-list" id="playerList"></div>
+            <div class="lobby-actions">
+              <button id="startBtn" class="btn-accent">Start the quiz</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Question -->
+      <section class="view" id="view-question">
+        <div class="question-view">
+          <div class="question-meta"><span id="qIndex">1</span> / <span id="qTotal">1</span></div>
+          <div class="timer-ring" id="timerRing"><span id="timerText">20</span></div>
+          <h1 class="question-prompt" id="qPrompt">Question</h1>
+          <img id="qImage" class="question-image" style="display:none" alt="" />
+          <div class="answer-grid" id="answerGrid"></div>
+          <div class="answers-received">
+            <span id="answersReceived">0</span> / <span id="answersTotal">0</span> answered
+          </div>
+        </div>
+      </section>
+
+      <!-- Reveal -->
+      <section class="view" id="view-reveal">
+        <div class="reveal-view">
+          <div class="question-meta"><span id="rIndex">1</span> / <span id="rTotal">1</span></div>
+          <h2 class="question-prompt" id="rPrompt"></h2>
+          <div class="reveal-grid">
+            <div class="bars">
+              <h3 class="serif">Answers</h3>
+              <div id="barRows"></div>
+            </div>
+            <div class="leaderboard-panel">
+              <h3 class="serif">Top 5</h3>
+              <div id="leaderboard"></div>
+            </div>
+          </div>
+          <div class="reveal-actions">
+            <button id="nextBtn" class="btn-primary">Next question →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Final -->
+      <section class="view" id="view-final">
+        <div class="final-view">
+          <h2>🎉 Congratulations! 🎉</h2>
+          <div class="podium" id="podium"></div>
+          <div class="full-lb" id="fullLb"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <audio id="sfx-lobby" src="/assets/sounds/lobby.mp3" loop preload="auto"></audio>
+  <audio id="sfx-tick" src="/assets/sounds/tick.mp3" preload="auto"></audio>
+  <audio id="sfx-reveal" src="/assets/sounds/reveal.mp3" preload="auto"></audio>
+  <audio id="sfx-podium" src="/assets/sounds/podium.mp3" preload="auto"></audio>
+
+  <!-- Floating reaction emojis from players -->
+  <div class="reaction-layer" id="reactionLayer" aria-hidden="true"></div>
+
+  <footer class="credit-footer">Developed by Nick Liu (with help from Claude)</footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/host.js"></script>
+</body>
+</html>

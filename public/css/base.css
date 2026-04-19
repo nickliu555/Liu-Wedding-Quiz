@@ -1,0 +1,193 @@
+:root {
+  --bg: #FBF7F2;
+  --surface: #FFFFFF;
+  --ink: #1F2A24;
+  --ink-soft: #4a5650;
+  --muted: #8a8580;
+
+  --pink: #E8A5B5;
+  --pink-deep: #C77088;
+  --green: #9CB79A;
+  --green-deep: #4F6B54;
+  --gold: #C9A96E;
+
+  /* 4 answer tile colors */
+  --tile-1: #C77088; /* rose */
+  --tile-2: #4F6B54; /* sage */
+  --tile-3: #7A9A9E; /* dusty blue-green */
+  --tile-4: #C9A96E; /* warm gold */
+
+  --radius: 14px;
+  --shadow: 0 8px 30px rgba(31, 42, 36, 0.08);
+  --shadow-strong: 0 12px 40px rgba(31, 42, 36, 0.18);
+
+  --font-serif: 'Playfair Display', 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .serif { font-family: var(--font-serif); font-weight: 600; }
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: var(--ink);
+  color: white;
+  padding: 14px 22px;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  transition: transform 0.08s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow); }
+button:active:not(:disabled) { transform: translateY(0); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary { background: var(--green-deep); }
+.btn-accent  { background: var(--pink-deep); }
+.btn-ghost   { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+
+input[type="text"] {
+  font-family: inherit;
+  font-size: 18px;
+  padding: 14px 16px;
+  border: 1.5px solid #d9d3cb;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease;
+  width: 100%;
+}
+input[type="text"]:focus { border-color: var(--green-deep); }
+
+/* Shared decorative header */
+.brand {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  color: var(--green-deep);
+  letter-spacing: 0.02em;
+}
+.brand .amp { color: var(--pink-deep); margin: 0 6px; }
+
+/* Tile color helpers (shared between player + host) */
+.tile-color-0 { background: var(--tile-1); }
+.tile-color-1 { background: var(--tile-2); }
+.tile-color-2 { background: var(--tile-3); }
+.tile-color-3 { background: var(--tile-4); }
+
+/* ----------------------------------------------------------------
+   Geometric answer shapes (CSS-drawn, NOT unicode).
+   Unicode glyphs (◆ ● ▲ ■) render at wildly different sizes across
+   fonts/OSes (iOS draws ⬤ huge, Windows draws ● small). Drawing the
+   shapes ourselves guarantees they all look identical everywhere.
+
+   Usage: <span class="geo geo-0"></span>  (0=diamond, 1=circle, 2=triangle, 3=square)
+   The shape's pixel size is controlled by font-size on the parent
+   (we use 1em width/height so existing font-size rules still work),
+   and color comes from the parent's `color` property.
+   ---------------------------------------------------------------- */
+.geo {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: middle;
+  background: currentColor;
+  /* default = square (geo-3) */
+}
+.geo-0 { /* diamond: square rotated 45deg, scaled so it fills the box */
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  transform: scale(1.1);
+}
+.geo-1 { /* circle */
+  border-radius: 50%;
+}
+.geo-2 { /* triangle (equilateral, pointing up) */
+  clip-path: polygon(50% 5%, 100% 95%, 0% 95%);
+}
+.geo-3 { /* square — no clip needed */
+  border-radius: 2px;
+}
+
+/* ----------------------------------------------------------------
+   Answer-option letter (A/B/C/D). Replaces the old geometric shapes.
+   Inherits font-size from the parent (.tile / .shape / .bar-row .shape)
+   and color from the parent's `color` property.
+   ---------------------------------------------------------------- */
+.choice-letter {
+  display: inline-block;
+  font-family: var(--font-display, var(--font-serif, serif));
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: currentColor;
+}
+
+/* Subtle credit footer shown on every page. */
+.credit-footer {
+  position: fixed;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-soft, #8a8580);
+  opacity: 0.5;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
+/* Decorative wedding band: a horizontally-tiling rose garland under the
+   brand. The left/right edges fade out with a mask so the band dissolves
+   into the page instead of reading as a pasted rectangle. */
+.vines-top {
+  display: block;
+  width: 100%;
+  height: 56px;
+  background-image: url('/assets/vines-top.png');
+  background-repeat: repeat-x;
+  background-position: center;
+  background-size: auto 100%;
+  margin: 6px 0 8px;
+  opacity: 0.85;
+  pointer-events: none;
+  user-select: none;
+  /* Fade edges so the band feels like part of the page, not a banner. */
+  -webkit-mask-image: linear-gradient(to right,
+    transparent 0%, black 12%, black 88%, transparent 100%);
+          mask-image: linear-gradient(to right,
+    transparent 0%, black 12%, black 88%, transparent 100%);
+}
+
+/* Legacy class no longer used; safe to remove. */
+.vines-bottom { display: none; }
+
+/* When the rose garland needs to live at the bottom of the page (e.g. the
+   join page, where it would otherwise float in the middle), pin it just
+   above the credit footer instead of leaving it in the document flow.
+   Constrained to 560px (matching the player/join container) and centered
+   so it doesn't span the full viewport on desktop. */
+.vines-bottom-anchor {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 560px;
+  bottom: 28px; /* clears the credit footer (bottom: 6px + ~22px tall) */
+  margin: 0;
+  z-index: 1;
+}
