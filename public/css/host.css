@@ -33,20 +33,41 @@ body.host {
 /* Main view area */
 .host-main {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  /* Use a single-cell grid so the active view and any outgoing
+     (.fading-out) view stack on top of each other in the SAME centered
+     cell during a crossfade. Previously the outgoing view was set to
+     `position: absolute; inset: 28px` which anchored it to the left
+     edge while the incoming view stayed flex-centered — causing a
+     brief leftward shift during transitions (very visible when screen
+     mirroring to a TV). */
+  display: grid;
+  grid-template-areas: 'stack';
   align-items: center;
-  justify-content: center;
+  justify-items: center;
   padding: 28px;
   overflow: hidden;
-  /* Anchor for absolutely-positioned outgoing views during a crossfade so
-     they overlay the incoming view instead of pushing it down the page. */
   position: relative;
 }
 
-.view { width: 100%; max-width: 1400px; display: none; }
+.view {
+  width: 100%;
+  max-width: 1400px;
+  /* Every view occupies the same single grid cell in .host-main. We
+     toggle visibility via `.active` / `.fading-out` instead of swapping
+     `display`, which keeps both stacked centered in the same spot
+     during a crossfade (no leftward jump). Inactive views are hidden
+     visually but still take their grid slot — that's fine because only
+     the active + fading-out views ever render content; the rest are
+     opacity 0 and pointer-events: none. */
+  grid-area: stack;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
 .view.active {
-  display: block;
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
   /* Fade in when a view becomes active so the swap from question -> reveal
      (and reveal -> final) feels like a soft transition rather than a snap.
      The matching fade-out is driven by the `.fading-out` class which
@@ -54,12 +75,11 @@ body.host {
   animation: viewFadeIn 0.45s ease both;
 }
 .view.fading-out {
-  /* Keep the view rendered while it animates out; show() removes it once
-     the transition completes. We pin it absolutely inside host-main so
-     it overlays (rather than pushes) the incoming view. */
-  display: block;
-  position: absolute;
-  inset: 28px; /* matches host-main padding */
+  /* Outgoing view stays in the same grid cell as the incoming one, so the
+     two stay centered together. show() removes the class once the fade
+     finishes. */
+  opacity: 1;
+  visibility: visible;
   pointer-events: none;
   animation: viewFadeOut 0.35s ease both;
 }
