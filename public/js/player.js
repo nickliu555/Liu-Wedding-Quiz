@@ -33,6 +33,55 @@
     );
   }
 
+  // ---------------- Intro ("Get Ready" splash) ----------------
+  let introTimer = null;
+  function stopIntroTimer() {
+    if (introTimer) { clearInterval(introTimer); introTimer = null; }
+  }
+  function renderIntro(payload) {
+    stopIntroTimer();
+    if (payload && typeof payload.serverNow === 'number') {
+      clockOffset = payload.serverNow - Date.now();
+    }
+    const endsAt = (payload && payload.endsAt) || (Date.now() + 5000);
+    elView.innerHTML =
+      '<div class="state-card intro-card">' +
+        '<div class="intro-hint">Up next…</div>' +
+        '<h2 class="serif intro-title">Get ready</h2>' +
+        '<div class="intro-countdown" id="pIntroCountdown">5</div>' +
+        '<p>First question coming up.</p>' +
+      '</div>';
+    const el = document.getElementById('pIntroCountdown');
+    function tick() {
+      const left = Math.max(0, Math.ceil((endsAt - serverNow()) / 1000));
+      if (el) el.textContent = String(left || 'Go!');
+      if (left <= 0) stopIntroTimer();
+    }
+    tick();
+    introTimer = setInterval(tick, 200);
+  }
+
+  // ---------------- Prompt (read-the-question lead-in) ----------------
+  // Shown for ~3s before the answer choices appear. We deliberately do NOT
+  // surface the question text on the player's phone — we want everyone
+  // looking up at the big screen during this beat.
+  function renderPrompt(p) {
+    stopCountdown();
+    stopIntroTimer();
+    currentQuestion = null;
+    answeredQuestionId = null;
+    if (p && typeof p.serverNow === 'number') {
+      clockOffset = p.serverNow - Date.now();
+    }
+    elView.innerHTML =
+      '<div class="state-card prompt-card">' +
+        '<div class="intro-hint">Question ' + (p.index + 1) + ' of ' + p.total + '</div>' +
+        '<h2 class="serif">Look up!</h2>' +
+        '<p>Read the question on the big screen.</p>' +
+        '<p style="margin-top:10px; color: var(--muted); font-size: 14px;">Choices appear in a moment…</p>' +
+      '</div>';
+  }
+
   // Answer options are labelled A/B/C/D — easier to call out ("B!") than
   // "diamond" / "circle" etc., and avoids looking like a direct Kahoot copy.
   const CHOICE_LETTERS = ['A', 'B', 'C', 'D'];
@@ -342,6 +391,14 @@
       elName.textContent = res.player.name;
       elScore.textContent = res.player.score || 0;
       if (res.phase === 'LOBBY') { setReactionsAllowed(true); renderLobbyWaiting(); }
+      else if (res.phase === 'INTRO') {
+        setReactionsAllowed(false);
+        renderIntro(res.intro);
+      }
+      else if (res.phase === 'PROMPT') {
+        setReactionsAllowed(false);
+        renderPrompt(res.prompt);
+      }
       else if (res.phase === 'QUESTION' && res.question) {
         setReactionsAllowed(false);
         if (typeof res.myChoiceIndex === 'number') {
@@ -392,6 +449,18 @@
     renderQuestion(q);
   });
 
+  socket.on('state:intro', function (payload) {
+    if (rejected) return;
+    setReactionsAllowed(false);
+    renderIntro(payload);
+  });
+
+  socket.on('state:prompt', function (p) {
+    if (rejected) return;
+    setReactionsAllowed(false);
+    renderPrompt(p);
+  });
+
   socket.on('state:reveal', function () {
     if (rejected) return;
     setReactionsAllowed(true);
@@ -423,6 +492,7 @@
     // bouncing the player straight to /join.
     rejected = true;
     stopCountdown();
+    stopIntroTimer();
     // NOTE: do NOT clear quiz.playerName here — renderRejected('reset')
     // copies it into quiz.rejoinName so the join form can pre-fill it.
     // The Rejoin button's inline onclick handles the final cleanup.

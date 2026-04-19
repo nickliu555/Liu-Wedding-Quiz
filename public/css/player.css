@@ -189,3 +189,37 @@ html { touch-action: manipulation; }
   border-radius: 999px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- Intro / Prompt cards on the player phone ---- */
+.intro-card, .prompt-card {
+  animation: fadeIn 0.4s ease;
+}
+.intro-hint {
+  color: var(--ink-soft);
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.intro-title {
+  margin: 0 0 8px;
+  color: var(--green-deep);
+}
+.intro-countdown {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 92px;
+  line-height: 1;
+  color: var(--pink-deep);
+  margin: 14px 0;
+  font-variant-numeric: tabular-nums;
+  animation: pIntroPulse 1s ease-in-out infinite;
+}
+@keyframes pIntroPulse {
+  0%, 100% { transform: scale(1);    }
+  50%      { transform: scale(1.08); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

@@ -4,12 +4,21 @@ const { calculatePoints } = require('./scoring');
 
 const PHASES = {
   LOBBY: 'LOBBY',
+  // "Get ready..." 5-second splash shown once when the game starts, before
+  // the very first question's prompt appears.
+  INTRO: 'INTRO',
+  // Per-question lead-in: the question text (and image) is shown for a
+  // brief beat before the answer choices appear and the answer timer
+  // starts. Gives the room a chance to actually read the question.
+  PROMPT: 'PROMPT',
   QUESTION: 'QUESTION',
   REVEAL: 'REVEAL',
   FINAL: 'FINAL',
 };
 
 const MAX_NAME_LEN = 20;
+const INTRO_DURATION_MS = 5000;
+const PROMPT_DURATION_MS = 3000;
 
 /**
  * Single-room quiz game state machine.
@@ -27,7 +36,10 @@ class Game {
     this.currentStartTs = 0;
     this.currentEndsAt = 0;
     this._questionTimer = null;
+    this._phaseTimer = null; // shared timer for INTRO and PROMPT lead-ins
     this.onQuestionTimeout = null; // set by transport
+    this.onIntroEnd = null;        // set by transport — fires when INTRO -> PROMPT
+    this.onPromptEnd = null;       // set by transport — fires when PROMPT -> QUESTION
   }
 
   // ---------------- Lobby / players ----------------
@@ -117,26 +129,93 @@ class Game {
     if (this.phase !== PHASES.LOBBY) return { ok: false, reason: 'already-started' };
     if (this.questions.length === 0) return { ok: false, reason: 'no-questions' };
     this.currentIndex = -1;
-    return this.advance();
+    return this._enterIntro();
   }
 
+  /**
+   * Advance to the next phase from the host's perspective.
+   *  - INTRO    -> PROMPT (skip the Get Ready splash)
+   *  - PROMPT   -> QUESTION (skip the read-the-question delay)
+   *  - QUESTION -> REVEAL (force-end the question early)
+   *  - REVEAL   -> next PROMPT, or FINAL if this was the last question
+   */
   advance() {
-    // from LOBBY or REVEAL -> QUESTION, or from REVEAL after last -> FINAL
     if (this.phase === PHASES.FINAL) return { ok: false, reason: 'final' };
-    if (this.phase === PHASES.QUESTION) return { ok: false, reason: 'question-in-progress' };
+    if (this.phase === PHASES.LOBBY) return { ok: false, reason: 'not-started' };
 
+    if (this.phase === PHASES.INTRO) {
+      this._endIntro();
+      return { ok: true, phase: PHASES.PROMPT };
+    }
+    if (this.phase === PHASES.PROMPT) {
+      this._endPrompt();
+      return { ok: true, phase: PHASES.QUESTION };
+    }
+    if (this.phase === PHASES.QUESTION) {
+      this._endQuestion('host');
+      return { ok: true, phase: PHASES.REVEAL };
+    }
+
+    // REVEAL -> next question's PROMPT, or FINAL
     const nextIndex = this.currentIndex + 1;
     if (nextIndex >= this.questions.length) {
       this.phase = PHASES.FINAL;
-      this._clearTimer();
+      this._clearTimers();
       return { ok: true, phase: PHASES.FINAL };
     }
-    this.currentIndex = nextIndex;
+    return this._enterPrompt(nextIndex);
+  }
+
+  _enterIntro() {
+    this._clearTimers();
+    this.phase = PHASES.INTRO;
+    this.currentStartTs = Date.now();
+    this.currentEndsAt = this.currentStartTs + INTRO_DURATION_MS;
+    this._phaseTimer = setTimeout(() => {
+      this._phaseTimer = null;
+      this._endIntro();
+    }, INTRO_DURATION_MS + 50);
+    return { ok: true, phase: PHASES.INTRO };
+  }
+
+  _endIntro() {
+    if (this.phase !== PHASES.INTRO) return;
+    this._clearTimers();
+    // Move into the first question's PROMPT phase.
+    this._enterPrompt(0);
+    if (typeof this.onIntroEnd === 'function') {
+      try { this.onIntroEnd(); } catch (_) { /* swallow */ }
+    }
+  }
+
+  _enterPrompt(index) {
+    this._clearTimers();
+    this.currentIndex = index;
+    this.phase = PHASES.PROMPT;
+    this.currentStartTs = Date.now();
+    this.currentEndsAt = this.currentStartTs + PROMPT_DURATION_MS;
+    this._phaseTimer = setTimeout(() => {
+      this._phaseTimer = null;
+      this._endPrompt();
+    }, PROMPT_DURATION_MS + 50);
+    return { ok: true, phase: PHASES.PROMPT };
+  }
+
+  _endPrompt() {
+    if (this.phase !== PHASES.PROMPT) return;
+    this._clearTimers();
+    this._enterQuestion();
+    if (typeof this.onPromptEnd === 'function') {
+      try { this.onPromptEnd(); } catch (_) { /* swallow */ }
+    }
+  }
+
+  _enterQuestion() {
+    this._clearTimers();
     this.phase = PHASES.QUESTION;
     const q = this.questions[this.currentIndex];
     this.currentStartTs = Date.now();
     this.currentEndsAt = this.currentStartTs + q.timeLimitSec * 1000;
-    this._clearTimer();
     this._questionTimer = setTimeout(() => {
       this._questionTimer = null;
       this._endQuestion('timeout');
@@ -144,17 +223,25 @@ class Game {
     return { ok: true, phase: PHASES.QUESTION, question: q };
   }
 
-  _clearTimer() {
+  _clearTimers() {
     if (this._questionTimer) {
       clearTimeout(this._questionTimer);
       this._questionTimer = null;
     }
+    if (this._phaseTimer) {
+      clearTimeout(this._phaseTimer);
+      this._phaseTimer = null;
+    }
   }
+
+  // Backwards-compat alias: nothing else uses this externally, but the name
+  // is referenced from server/index.js for symmetry with onQuestionTimeout.
+  _clearTimer() { this._clearTimers(); }
 
   /** Force-end current question and move to REVEAL. Idempotent. */
   _endQuestion(_reason) {
     if (this.phase !== PHASES.QUESTION) return;
-    this._clearTimer();
+    this._clearTimers();
     this.phase = PHASES.REVEAL;
     if (typeof this.onQuestionTimeout === 'function') {
       try { this.onQuestionTimeout(); } catch (_) { /* swallow */ }
@@ -229,6 +316,41 @@ class Game {
     };
   }
 
+  /** Public view of the "Get Ready" intro splash. */
+  getIntroPublic() {
+    return {
+      endsAt: this.currentEndsAt,
+      serverNow: Date.now(),
+      totalQuestions: this.questions.length,
+      durationMs: INTRO_DURATION_MS,
+    };
+  }
+
+  /** Public view of a question's PROMPT phase (no answer timer yet). */
+  getPromptPublic() {
+    const q = this.getCurrentQuestion();
+    if (!q) return null;
+    return {
+      id: q.id,
+      index: this.currentIndex,
+      total: this.questions.length,
+      prompt: q.prompt,
+      image: q.image,
+      // Include the choices so the host can pre-render the answer tiles
+      // during the lead-in (kept hidden via CSS) and then smoothly fade
+      // them in when QUESTION begins — avoids the visible "pop" you get
+      // from inserting fresh DOM nodes at the same moment they transition.
+      choices: q.choices,
+      // When this prompt phase ends and the choices appear.
+      endsAt: this.currentEndsAt,
+      serverNow: Date.now(),
+      durationMs: PROMPT_DURATION_MS,
+      // Surface the question's own time limit so the host/player can show
+      // a "20s to answer" hint during the lead-in.
+      timeLimitSec: q.timeLimitSec,
+    };
+  }
+
   getAnswerDistribution() {
     const q = this.getCurrentQuestion();
     if (!q) return [0, 0, 0, 0];
@@ -292,7 +414,7 @@ class Game {
   }
 
   reset() {
-    this._clearTimer();
+    this._clearTimers();
     this.phase = PHASES.LOBBY;
     this.players = new Map();
     this.currentIndex = -1;
@@ -301,4 +423,4 @@ class Game {
   }
 }
 
-module.exports = { Game, PHASES, MAX_NAME_LEN };
+module.exports = { Game, PHASES, MAX_NAME_LEN, INTRO_DURATION_MS, PROMPT_DURATION_MS };

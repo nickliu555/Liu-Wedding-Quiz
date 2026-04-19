@@ -6,12 +6,37 @@
   // ---------------- Element refs ----------------
   const views = {
     lobby: document.getElementById('view-lobby'),
+    intro: document.getElementById('view-intro'),
     question: document.getElementById('view-question'),
     reveal: document.getElementById('view-reveal'),
     final: document.getElementById('view-final'),
   };
   function show(name) {
-    Object.keys(views).forEach(function (k) { views[k].classList.toggle('active', k === name); });
+    // Crossfade between views instead of a hard `display` swap. We mark the
+    // outgoing view with `.fading-out` (which CSS animates to opacity 0),
+    // then after the transition we drop `.active` from it and add `.active`
+    // to the incoming view. Quick safeguard: if the same view is requested
+    // we skip the dance entirely.
+    const currentName = Object.keys(views).find(function (k) {
+      return views[k].classList.contains('active');
+    });
+    if (currentName === name) return;
+
+    const incoming = views[name];
+    if (!incoming) return;
+
+    const outgoing = currentName ? views[currentName] : null;
+    if (outgoing) {
+      outgoing.classList.add('fading-out');
+      // Match the .view opacity transition duration (350ms in CSS).
+      setTimeout(function () {
+        outgoing.classList.remove('active');
+        outgoing.classList.remove('fading-out');
+        incoming.classList.add('active');
+      }, 350);
+    } else {
+      incoming.classList.add('active');
+    }
   }
 
   // ---------------- Inline modal / toast (avoids browser confirm() that exits fullscreen) ----------------
@@ -62,6 +87,8 @@
   const answersTotal = document.getElementById('answersTotal');
   const timerRing = document.getElementById('timerRing');
   const timerText = document.getElementById('timerText');
+
+  const introCountdown = document.getElementById('introCountdown');
 
   const rIndex = document.getElementById('rIndex');
   const rTotal = document.getElementById('rTotal');
@@ -224,8 +251,8 @@
         showToast('Could not start: ' + (res && res.reason));
         return;
       }
-      // Bright "let's begin!" fanfare as the first question loads.
-      playStartFanfare();
+      // The fanfare is fired by renderIntro() when the server's state:intro
+      // event arrives, so it's perfectly synced with the splash itself.
     });
   });
 
@@ -564,26 +591,124 @@
   function renderQuestion(q) {
     currentQ = q;
     lastTickSec = null;
+    const wasPromptOnly = document.body.classList.contains('host-prompt-only');
     show('question');
+
+    // If we were in prompt-only mode, the answer tiles have already been
+    // pre-rendered by renderPrompt() and are sitting hidden in the DOM.
+    // We just need to remove the class to let the CSS transitions fade
+    // them in. We DO NOT replace innerHTML here — that would create fresh
+    // nodes that skip their initial transition state and pop in.
     qIndex.textContent = q.index + 1;
     qTotal.textContent = q.total;
     qPrompt.textContent = q.prompt;
     if (q.image) { qImage.src = q.image; qImage.style.display = 'block'; }
     else { qImage.style.display = 'none'; qImage.removeAttribute('src'); }
 
-    answerGrid.innerHTML = q.choices.map(function (c, i) {
-      return (
-        '<div class="answer-card tile-color-' + i + '" data-idx="' + i + '">' +
-          '<div class="shape">' + shapeHTML(i) + '</div>' +
-          '<div class="text">' + escapeHtml(c) + '</div>' +
-        '</div>'
-      );
-    }).join('');
+    // Re-render tiles only if they weren't already pre-rendered (e.g. host
+    // refreshed mid-question and skipped the prompt phase entirely).
+    const needsTiles =
+      !wasPromptOnly ||
+      answerGrid.children.length !== q.choices.length ||
+      Array.from(answerGrid.children).some(function (c, i) {
+        const txt = c.querySelector('.text');
+        return !txt || txt.textContent !== q.choices[i];
+      });
+    if (needsTiles) {
+      answerGrid.innerHTML = q.choices.map(function (c, i) {
+        return (
+          '<div class="answer-card tile-color-' + i + '" data-idx="' + i + '">' +
+            '<div class="shape">' + shapeHTML(i) + '</div>' +
+            '<div class="text">' + escapeHtml(c) + '</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
 
     answersReceived.textContent = '0';
     // answersTotal is updated via host:answerCount event
 
-    startQTimer(q);
+    if (wasPromptOnly) {
+      // Drop the prompt-only class on the next frame so the browser has a
+      // chance to commit the current (hidden) state before transitioning.
+      requestAnimationFrame(function () {
+        document.body.classList.remove('host-prompt-only');
+        startQTimer(q);
+      });
+    } else {
+      document.body.classList.remove('host-prompt-only');
+      startQTimer(q);
+    }
+  }
+
+  // ---------------- Intro ("Get Ready" splash) ----------------
+  // Shown once when the host starts the game, before the first question's
+  // PROMPT phase. Pure visual beat to focus the room.
+  let introTimer = null;
+  function stopIntroTimer() {
+    if (introTimer) { clearInterval(introTimer); introTimer = null; }
+  }
+  function renderIntro(payload) {
+    stopQTimer();
+    stopIntroTimer();
+    show('intro');
+    if (payload && typeof payload.serverNow === 'number') {
+      clockOffset = payload.serverNow - Date.now();
+    }
+    const endsAt = (payload && payload.endsAt) || (Date.now() + 5000);
+    function tick() {
+      const left = Math.max(0, Math.ceil((endsAt - serverNow()) / 1000));
+      if (introCountdown) introCountdown.textContent = String(left || 'Go!');
+      if (left <= 0) stopIntroTimer();
+    }
+    tick();
+    introTimer = setInterval(tick, 200);
+    // A short rising fanfare to cue the room that things are starting.
+    if (soundOn) playStartFanfare();
+  }
+
+  // ---------------- Prompt (read-the-question lead-in) ----------------
+  // Shows the question text (and image, if any) WITHOUT the answer choices
+  // and without an active answer timer. After ~3s the server fires
+  // state:question and renderQuestion swaps in the choice tiles + timer.
+  function renderPrompt(p) {
+    stopQTimer();
+    stopIntroTimer();
+    show('question');
+    qIndex.textContent = (p.index + 1);
+    qTotal.textContent = p.total;
+    qPrompt.textContent = p.prompt;
+    if (p.image) { qImage.src = p.image; qImage.style.display = 'block'; }
+    else { qImage.style.display = 'none'; qImage.removeAttribute('src'); }
+    // Pre-render the answer tiles NOW (during the lead-in) so they're
+    // already in the DOM when state:question fires. The host-prompt-only
+    // class keeps them hidden via CSS until then. This is what makes the
+    // PROMPT -> QUESTION transition smooth — when the class is removed,
+    // the existing nodes already have their "hidden" state committed and
+    // the CSS transitions can carry them to the "visible" state.
+    if (Array.isArray(p.choices) && p.choices.length === 4) {
+      answerGrid.innerHTML = p.choices.map(function (c, i) {
+        return (
+          '<div class="answer-card tile-color-' + i + '" data-idx="' + i + '">' +
+            '<div class="shape">' + shapeHTML(i) + '</div>' +
+            '<div class="text">' + escapeHtml(c) + '</div>' +
+          '</div>'
+        );
+      }).join('');
+    } else {
+      answerGrid.innerHTML = '';
+    }
+    answersReceived.textContent = '0';
+    // Park the timer ring at the question's full time so the eye has
+    // something to read while waiting for choices to drop in.
+    if (timerText && p.timeLimitSec) timerText.textContent = String(p.timeLimitSec);
+    if (timerRing) timerRing.style.setProperty('--pct', '100');
+    // Add the class AFTER populating so the new tiles inherit the hidden
+    // state from the moment they exist.
+    document.body.classList.add('host-prompt-only');
+    if (p && typeof p.serverNow === 'number') {
+      clockOffset = p.serverNow - Date.now();
+    }
   }
 
   function startQTimer(q) {
@@ -703,6 +828,11 @@
 
   function renderFinal(f) {
     show('final');
+
+    // Reset the "Congratulations" banner — it's revealed only after the
+    // winner pops in (handled inside runPodiumReveal).
+    var congratsEl = document.getElementById('finalCongrats');
+    if (congratsEl) congratsEl.classList.remove('visible');
 
     // Brief "Now for the results…" intro before the podium reveal begins.
     // Pure visual beat — silence helps the room turn its attention to the
@@ -825,9 +955,17 @@
               playCheerChord(slot.tier);
               confettiBurst();
               playApplause(4);
+              // Drop the big "🎉 Congratulations! 🎉" banner in only NOW —
+              // having it sit at the top during the suspense reveal would
+              // spoil the climax. It bounces in just as the winner lands,
+              // riding the same confetti/applause moment.
+              var congrats = document.getElementById('finalCongrats');
+              if (congrats) {
+                setTimeout(function () { congrats.classList.add('visible'); }, 250);
+              }
               // Now the full standings can come up — they no longer spoil
               // anything since the winner is revealed.
-              setTimeout(function () { fullLb.classList.add('visible'); }, 600);
+              setTimeout(function () { fullLb.classList.add('visible'); }, 1100);
             }, WINNER_SCORE_MS + WINNER_HOLD_MS);
           } else {
             if (typeof stopRoll === 'function') stopRoll();
@@ -908,6 +1046,8 @@
   socket.on('state:question', renderQuestion);
   socket.on('state:reveal', renderReveal);
   socket.on('state:final', renderFinal);
+  socket.on('state:intro', renderIntro);
+  socket.on('state:prompt', renderPrompt);
 
   // ---------------- Floating reactions from players ----------------
   // Players tap an emoji on their phone -> server -> we spawn a floating
@@ -950,6 +1090,8 @@
         // Reset cached question state so next round starts cleanly.
         currentQ = null;
         stopQTimer();
+        stopIntroTimer();
+        document.body.classList.remove('host-prompt-only');
         enterLobby(res);
       }
     });

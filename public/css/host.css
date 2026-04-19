@@ -39,10 +39,38 @@ body.host {
   justify-content: center;
   padding: 28px;
   overflow: hidden;
+  /* Anchor for absolutely-positioned outgoing views during a crossfade so
+     they overlay the incoming view instead of pushing it down the page. */
+  position: relative;
 }
 
 .view { width: 100%; max-width: 1400px; display: none; }
-.view.active { display: block; }
+.view.active {
+  display: block;
+  /* Fade in when a view becomes active so the swap from question -> reveal
+     (and reveal -> final) feels like a soft transition rather than a snap.
+     The matching fade-out is driven by the `.fading-out` class which
+     show() sets on the outgoing view just before swapping. */
+  animation: viewFadeIn 0.45s ease both;
+}
+.view.fading-out {
+  /* Keep the view rendered while it animates out; show() removes it once
+     the transition completes. We pin it absolutely inside host-main so
+     it overlays (rather than pushes) the incoming view. */
+  display: block;
+  position: absolute;
+  inset: 28px; /* matches host-main padding */
+  pointer-events: none;
+  animation: viewFadeOut 0.35s ease both;
+}
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes viewFadeOut {
+  from { opacity: 1; transform: translateY(0);     }
+  to   { opacity: 0; transform: translateY(-10px); }
+}
 
 /* ---- Auth ---- */
 .auth-card {
@@ -259,6 +287,15 @@ body.host {
 .final-view h2 {
   font-family: var(--font-serif); font-size: clamp(40px, 5vw, 72px); margin: 0 0 30px;
   color: var(--green-deep);
+  /* Hidden until after the winner is revealed — JS adds .visible to drop
+     it in with a celebratory bounce. */
+  opacity: 0;
+  transform: translateY(-24px) scale(0.92);
+  transition: opacity 0.7s ease, transform 0.8s cubic-bezier(.2, 1.4, .4, 1);
+}
+.final-view h2.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 .podium {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;
@@ -283,9 +320,9 @@ body.host {
 .results-intro.hide { opacity: 0; transform: translateY(-8px); }
 /* When the intro is showing, hide the podium completely so it doesn't
    peek through underneath. */
-.final-view.pre-reveal h2,
 .final-view.pre-reveal .podium,
 .final-view.pre-reveal .full-lb { display: none; }
+.final-view.pre-reveal h2 { display: none; }
 .podium-step {
   background: var(--surface); border-radius: var(--radius); padding: 24px 16px;
   box-shadow: var(--shadow-strong);
@@ -452,3 +489,107 @@ body.host {
 .inline-toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- Intro ("Get Ready" splash) ---- */
+/* Full-bleed splash: fills the host-main area and centers vertically.
+   The intro-sub line is anchored toward the bottom with `margin-top: auto`
+   so the title + countdown stay visually centered while the sub never
+   touches them. */
+.intro-view {
+  text-align: center;
+  padding: 4vh 20px 6vh;
+  animation: fadeIn 0.4s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-height: 80vh;
+}
+.intro-view .intro-hint {
+  color: var(--ink-soft);
+  font-size: clamp(18px, 1.6vw, 26px);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.intro-view .intro-title {
+  font-size: clamp(72px, 11vw, 180px);
+  margin: 0;
+  color: var(--green-deep);
+  line-height: 1;
+}
+.intro-view .intro-countdown {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(120px, 20vw, 320px);
+  line-height: 1;
+  color: var(--pink-deep);
+  font-variant-numeric: tabular-nums;
+  animation: introPulse 1s ease-in-out infinite;
+  margin: 0;
+}
+.intro-view .intro-sub {
+  font-size: clamp(18px, 1.8vw, 28px);
+  color: var(--ink-soft);
+  /* Push to the bottom of the splash so it never crowds the countdown. */
+  margin: auto 0 0;
+  padding-top: 24px;
+}
+@keyframes introPulse {
+  0%, 100% { transform: scale(1);    opacity: 1;   }
+  50%      { transform: scale(1.06); opacity: 0.9; }
+}
+
+/* ---- Prompt-only mode (read-the-question lead-in on the host) ---- */
+/* During the lead-in, the question prompt stays large and centered while
+   the answer tiles, the answer-count, and the timer ring are faded out.
+   When the choices arrive the class is removed and everything fades and
+   scales smoothly back into place. */
+#view-question .question-prompt,
+#view-question .answer-grid,
+#view-question .answers-received,
+#view-question .timer-ring,
+#view-question .question-image {
+  transition:
+    opacity 0.7s ease,
+    transform 0.85s cubic-bezier(.2, .9, .25, 1);
+  transform-origin: center;
+}
+
+/* Prompt-only state: enlarge the prompt, hide everything else. We use
+   opacity + transform (instead of `visibility: hidden`) so the swap to the
+   answer-tile view animates smoothly instead of snapping. */
+body.host.host-prompt-only #view-question .question-prompt {
+  /* Combine scale-up with a downward shift so the prompt sits closer to
+     the optical center of the screen while it's the only thing visible.
+     Using transform (vs. margin) keeps the transition smooth and avoids
+     any layout jump when the choices fade in. */
+  transform: translateY(8vh) scale(1.35);
+}
+body.host.host-prompt-only #view-question .answer-grid,
+body.host.host-prompt-only #view-question .answers-received,
+body.host.host-prompt-only #view-question .timer-ring {
+  opacity: 0;
+  transform: translateY(28px);
+  pointer-events: none;
+}
+
+/* Stagger the answer tiles in so they cascade in sequence (140ms apart)
+   rather than all popping at once. */
+#view-question .answer-grid .answer-card {
+  transition:
+    opacity 0.65s ease,
+    transform 0.75s cubic-bezier(.2, .9, .25, 1);
+}
+#view-question .answer-grid .answer-card[data-idx="0"] { transition-delay: 0.05s; }
+#view-question .answer-grid .answer-card[data-idx="1"] { transition-delay: 0.18s; }
+#view-question .answer-grid .answer-card[data-idx="2"] { transition-delay: 0.32s; }
+#view-question .answer-grid .answer-card[data-idx="3"] { transition-delay: 0.46s; }
+body.host.host-prompt-only #view-question .answer-grid .answer-card {
+  opacity: 0;
+  transform: translateY(36px) scale(0.94);
+  /* No delay on the way OUT — they should disappear instantly when a new
+     prompt phase begins (the prompt-only class is being re-applied). */
+  transition-delay: 0s;
+}

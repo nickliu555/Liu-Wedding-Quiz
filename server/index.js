@@ -114,6 +114,17 @@ function broadcastQuestion() {
   io.emit('state:question', q);
 }
 
+function broadcastIntro() {
+  const intro = game.getIntroPublic();
+  io.emit('state:intro', intro);
+}
+
+function broadcastPrompt() {
+  const p = game.getPromptPublic();
+  if (!p) return;
+  io.emit('state:prompt', p);
+}
+
 function broadcastReveal() {
   const q = game.getCurrentQuestion();
   if (!q) return;
@@ -152,6 +163,10 @@ function broadcastAnswerCount() {
 
 // When server-side timer expires (or all-answered), advance to reveal.
 game.onQuestionTimeout = () => broadcastReveal();
+// When the "Get ready" splash finishes, broadcast the first question's prompt.
+game.onIntroEnd = () => broadcastPrompt();
+// When the prompt lead-in finishes, broadcast the answer choices + start timer.
+game.onPromptEnd = () => broadcastQuestion();
 
 // ---------------- Socket handlers ----------------
 io.on('connection', (socket) => {
@@ -187,7 +202,11 @@ io.on('connection', (socket) => {
       player: { id: res.player.id, name: res.player.name, score: res.player.score },
       phase: game.phase,
     };
-    if (game.phase === PHASES.QUESTION) {
+    if (game.phase === PHASES.INTRO) {
+      payload.intro = game.getIntroPublic();
+    } else if (game.phase === PHASES.PROMPT) {
+      payload.prompt = game.getPromptPublic();
+    } else if (game.phase === PHASES.QUESTION) {
       payload.question = game.getQuestionPublic();
       // If this player already locked in an answer for the current question
       // (they refreshed mid-question after answering), tell the client so it
@@ -232,7 +251,15 @@ io.on('connection', (socket) => {
     if (typeof index !== 'number' || index < 0 || index >= REACTION_COUNT) {
       return ack && ack({ ok: false, reason: 'bad-index' });
     }
-    if (game.phase === PHASES.QUESTION) {
+    // Reactions allowed in LOBBY / REVEAL / FINAL only — not during a live
+    // question (would distract from the choices) and not during INTRO /
+    // PROMPT lead-ins (would clutter the "get ready" / read-the-question
+    // moment with floating emojis).
+    if (
+      game.phase === PHASES.QUESTION ||
+      game.phase === PHASES.INTRO ||
+      game.phase === PHASES.PROMPT
+    ) {
       return ack && ack({ ok: false, reason: 'phase-closed' });
     }
     const now = Date.now();
@@ -262,7 +289,12 @@ io.on('connection', (socket) => {
       currentIndex: game.currentIndex,
     });
     // Replay current state so a refreshed host page resumes exactly where it was.
-    if (game.phase === PHASES.QUESTION) {
+    if (game.phase === PHASES.INTRO) {
+      socket.emit('state:intro', game.getIntroPublic());
+    } else if (game.phase === PHASES.PROMPT) {
+      const p = game.getPromptPublic();
+      if (p) socket.emit('state:prompt', p);
+    } else if (game.phase === PHASES.QUESTION) {
       const q = game.getQuestionPublic();
       if (q) socket.emit('state:question', q);
       socket.emit('host:answerCount', {
@@ -306,25 +338,31 @@ io.on('connection', (socket) => {
     if (!res.ok) return ack && ack(res);
     ack && ack({ ok: true });
     broadcastLobby();
-    broadcastQuestion();
+    // Game now in INTRO phase — show the "Get ready..." splash to everyone.
+    broadcastIntro();
   });
 
   socket.on('host:next', (_p, ack) => {
     if (!requireHost(ack)) return;
-    if (game.phase === PHASES.QUESTION) {
-      // allow host to force-end the question early
-      game._endQuestion('host');
-      broadcastReveal();
-      return ack && ack({ ok: true, advanced: 'reveal' });
-    }
+    // advance() routes itself based on the current phase: skip intro,
+    // skip prompt, force-end question, or move from reveal to next prompt /
+    // final. We just have to broadcast whatever new phase we landed in.
     const res = game.advance();
     if (!res.ok) return ack && ack(res);
-    if (res.phase === PHASES.FINAL) {
-      ack && ack({ ok: true, advanced: 'final' });
-      broadcastFinal();
-    } else {
-      ack && ack({ ok: true, advanced: 'question' });
+    if (res.phase === PHASES.PROMPT) {
+      broadcastPrompt();
+      ack && ack({ ok: true, advanced: 'prompt' });
+    } else if (res.phase === PHASES.QUESTION) {
       broadcastQuestion();
+      ack && ack({ ok: true, advanced: 'question' });
+    } else if (res.phase === PHASES.REVEAL) {
+      broadcastReveal();
+      ack && ack({ ok: true, advanced: 'reveal' });
+    } else if (res.phase === PHASES.FINAL) {
+      broadcastFinal();
+      ack && ack({ ok: true, advanced: 'final' });
+    } else {
+      ack && ack({ ok: true });
     }
   });
 
