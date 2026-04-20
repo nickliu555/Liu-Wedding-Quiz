@@ -98,6 +98,9 @@ const HOST_ROOM = 'hosts';
 const REACTION_COUNT = 6; // must match the player UI palette length
 const REACTION_COOLDOWN_MS = 10 * 1000;
 const lastReactionAt = new Map(); // playerId -> ms timestamp of last reaction
+// When true, the host has temporarily muted all player reactions. Persists
+// across phase transitions until the host toggles it back on.
+let reactionsMuted = false;
 
 function broadcastLobby() {
   io.emit('state:lobby', {
@@ -136,6 +139,9 @@ function broadcastReveal() {
     distribution: game.getAnswerDistribution(),
     leaderboardTop5: game.getLeaderboard(5),
     isLastQuestion: game.currentIndex === questions.length - 1,
+    // 'timeout' | 'all-answered' | 'host' — drives the brief sting copy on
+    // the host page ("Time's up!" vs. "Let's see the answers!").
+    endReason: game.lastEndReason || 'host',
   };
   io.emit('state:reveal', payload);
   // Per-player results
@@ -186,7 +192,7 @@ io.on('connection', (socket) => {
     role = 'player';
     playerId = pid;
     socket.join('players');
-    ack && ack({ ok: true, player: { id: res.player.id, name: res.player.name } });
+    ack && ack({ ok: true, player: { id: res.player.id, name: res.player.name }, reactionsMuted });
     broadcastLobby();
   });
 
@@ -201,6 +207,7 @@ io.on('connection', (socket) => {
       ok: true,
       player: { id: res.player.id, name: res.player.name, score: res.player.score },
       phase: game.phase,
+      reactionsMuted,
     };
     if (game.phase === PHASES.INTRO) {
       payload.intro = game.getIntroPublic();
@@ -262,6 +269,9 @@ io.on('connection', (socket) => {
     ) {
       return ack && ack({ ok: false, reason: 'phase-closed' });
     }
+    if (reactionsMuted) {
+      return ack && ack({ ok: false, reason: 'muted' });
+    }
     const now = Date.now();
     const last = lastReactionAt.get(playerId) || 0;
     if (now - last < REACTION_COOLDOWN_MS) {
@@ -287,6 +297,7 @@ io.on('connection', (socket) => {
       players: game.getLobbyPlayers(),
       questionsTotal: questions.length,
       currentIndex: game.currentIndex,
+      reactionsMuted,
     });
     // Replay current state so a refreshed host page resumes exactly where it was.
     if (game.phase === PHASES.INTRO) {
@@ -316,6 +327,8 @@ io.on('connection', (socket) => {
           distribution: game.getAnswerDistribution(),
           leaderboardTop5: game.getLeaderboard(5),
           isLastQuestion: game.currentIndex === questions.length - 1,
+          // On host refresh we don't replay the sting — they're past it.
+          endReason: 'replay',
         });
       }
     } else if (game.phase === PHASES.FINAL) {
@@ -383,6 +396,15 @@ io.on('connection', (socket) => {
     ack && ack({ ok: true });
     io.emit('state:reset');
     broadcastLobby();
+  });
+
+  socket.on('host:setReactionsMuted', ({ muted } = {}, ack) => {
+    if (!requireHost(ack)) return;
+    reactionsMuted = !!muted;
+    ack && ack({ ok: true, reactionsMuted });
+    // Broadcast to everyone (players gray out their bar; other host pages
+    // sync their button state).
+    io.emit('state:reactionsMuted', { muted: reactionsMuted });
   });
 
   // ---- Disconnect ----

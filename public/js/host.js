@@ -102,6 +102,7 @@
 
   const fullscreenBtn = document.getElementById('fullscreenBtn');
   const musicBtn = document.getElementById('musicBtn');
+  const muteReactionsBtn = document.getElementById('muteReactionsBtn');
   const resetBtn = document.getElementById('resetBtn');
 
   const sfxLobby = document.getElementById('sfx-lobby');
@@ -114,6 +115,7 @@
   let soundOn = true;
   function updateMusicBtnLabel() {
     musicBtn.textContent = soundOn ? '🔊 Sound: On' : '🔇 Sound: Off';
+    musicBtn.classList.toggle('btn-muted', !soundOn);
   }
   updateMusicBtnLabel();
   let sfxUnlocked = false;
@@ -181,6 +183,42 @@
     });
   });
 
+  // ---------------- Mute player reactions ----------------
+  // Toggle button that tells the server to block all incoming player
+  // reactions and broadcasts the muted state so player phones gray out
+  // their reaction bar. The button label/style mirrors the current state
+  // so a refreshed host page can read it from the host:auth ack.
+  let reactionsMuted = false;
+  function updateMuteReactionsBtn() {
+    if (!muteReactionsBtn) return;
+    if (reactionsMuted) {
+      muteReactionsBtn.textContent = '🔕 Reactions: Off';
+      muteReactionsBtn.classList.add('btn-muted');
+      muteReactionsBtn.title = 'Player reactions are muted — click to allow';
+    } else {
+      muteReactionsBtn.textContent = '🔔 Reactions: On';
+      muteReactionsBtn.classList.remove('btn-muted');
+      muteReactionsBtn.title = 'Click to mute all player reactions';
+    }
+  }
+  updateMuteReactionsBtn();
+  if (muteReactionsBtn) {
+    muteReactionsBtn.addEventListener('click', function () {
+      const next = !reactionsMuted;
+      socket.emit('host:setReactionsMuted', { muted: next }, function (res) {
+        if (res && res.ok) {
+          reactionsMuted = !!res.reactionsMuted;
+          updateMuteReactionsBtn();
+        }
+      });
+    });
+  }
+  // Keep the button in sync if another host page toggles it.
+  socket.on('state:reactionsMuted', function (p) {
+    reactionsMuted = !!(p && p.muted);
+    updateMuteReactionsBtn();
+  });
+
   // ---------------- Auto-enter on load ----------------
   socket.on('connect', function () {
     socket.emit('host:auth', {}, function (res) {
@@ -188,6 +226,8 @@
       // Always prep totals so reveal/final views show correct counts.
       qTotal.textContent = res.questionsTotal;
       rTotal.textContent = res.questionsTotal;
+      reactionsMuted = !!res.reactionsMuted;
+      updateMuteReactionsBtn();
       if (res.phase === 'LOBBY') {
         enterLobby(res);
       }
@@ -588,12 +628,90 @@
     });
   }
 
+  // ---------------- Sting overlay (Time's up! / Let's see the answers!) ----------------
+  // Brief full-screen flash between QUESTION and REVEAL — Kahoot-style
+  // beat that gives the room a moment to react before the answer-bar
+  // chart slams in. Two variants:
+  //   - timeout       -> "Time's up!" (pinkish, urgent)
+  //   - all-answered  -> "Let's see the answers!" (greenish, satisfied)
+  // Calls `done` after the overlay has been visible long enough that the
+  // caller can swap the underlying view (it stays on top during the swap
+  // and fades out on its own).
+  var STING_VISIBLE_MS = 2200; // how long the sting text holds
+  var STING_FADE_MS = 350;     // matches the CSS opacity transition
+  function playSting(reason, done) {
+    var overlay = document.getElementById('stingOverlay');
+    var textEl = document.getElementById('stingText');
+    if (!overlay || !textEl) {
+      if (typeof done === 'function') done();
+      return;
+    }
+    var copy =
+      reason === 'timeout' ? "Time's up!" :
+      reason === 'all-answered' ? "Let's see the answers!" :
+      'Results';
+    textEl.textContent = copy;
+    overlay.classList.remove('timeout', 'all-answered');
+    overlay.classList.add(reason);
+    // Trigger fade-in on next frame so the CSS transition runs.
+    requestAnimationFrame(function () { overlay.classList.add('visible'); });
+    // Audio: timeout already has the alarm beep from the per-second tick
+    // at 0s, so we stay quiet there. For 'all-answered' we play a short
+    // upward chime to mark the beat ("ding! — let's see the answers").
+    if (reason === 'all-answered') {
+      playRevealChime();
+    }
+    // Hand control back to the caller (they'll render the reveal under
+    // the overlay) and start the fade-out.
+    if (typeof done === 'function') {
+      setTimeout(done, STING_VISIBLE_MS - STING_FADE_MS);
+    }
+    setTimeout(function () { overlay.classList.remove('visible'); }, STING_VISIBLE_MS);
+  }
+
+  // (No tone helper needed — the sting is purely visual.)
+
+  // Short two-note upward chime played alongside "Let's see the answers!".
+  // Light, glockenspiel-ish — won't step on the reveal SFX that follows.
+  function playRevealChime() {
+    if (!soundOn) return;
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state !== 'running') {
+      ctx.resume().catch(function(){});
+      if (ctx.state !== 'running') return;
+    }
+    const t0 = ctx.currentTime;
+    // G5 -> C6 — a pleasant little "ding-ding".
+    const notes = [
+      { freq: 783.99, start: 0.00, dur: 0.32 },
+      { freq: 1046.50, start: 0.13, dur: 0.45 },
+    ];
+    notes.forEach(function (n) {
+      [
+        { type: 'triangle', freq: n.freq,       vol: 0.30 },
+        { type: 'sine',     freq: n.freq * 2,   vol: 0.10 },
+      ].forEach(function (layer) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = layer.type;
+        osc.frequency.value = layer.freq;
+        const t = t0 + n.start;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(layer.vol, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + n.dur);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + n.dur + 0.05);
+      });
+    });
+  }
+
   function renderQuestion(q) {
     currentQ = q;
     lastTickSec = null;
     const wasPromptOnly = document.body.classList.contains('host-prompt-only');
     show('question');
-
     // If we were in prompt-only mode, the answer tiles have already been
     // pre-rendered by renderPrompt() and are sitting hidden in the DOM.
     // We just need to remove the class to let the CSS transitions fade
@@ -704,8 +822,16 @@
     if (timerText && p.timeLimitSec) timerText.textContent = String(p.timeLimitSec);
     if (timerRing) timerRing.style.setProperty('--pct', '100');
     // Add the class AFTER populating so the new tiles inherit the hidden
-    // state from the moment they exist.
-    document.body.classList.add('host-prompt-only');
+    // state from the moment they exist. The `host-prompt-instant` helper
+    // suppresses transitions for one frame so the timer ring and tiles
+    // snap to their hidden state instead of visibly fading out across the
+    // intro -> question crossfade.
+    document.body.classList.add('host-prompt-only', 'host-prompt-instant');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        document.body.classList.remove('host-prompt-instant');
+      });
+    });
     if (p && typeof p.serverNow === 'number') {
       clockOffset = p.serverNow - Date.now();
     }
@@ -1044,7 +1170,32 @@
     answersTotal.textContent = s.total;
   });
   socket.on('state:question', renderQuestion);
-  socket.on('state:reveal', renderReveal);
+  socket.on('state:reveal', function (r) {
+    // Play a brief "sting" between QUESTION and REVEAL — matches Kahoot's
+    // beat where you hear "Time's up!" (timeout) or "Let's see the
+    // answers!" (everyone answered early). On host refresh the server
+    // sends endReason='replay' so we skip the sting entirely.
+    var reason = r && r.endReason;
+    // Stop the local countdown immediately — otherwise if the question
+    // ended early (last player answered with a few seconds to spare), the
+    // tick interval keeps firing in the background and you hear the
+    // urgent-second beeps and "time's up" alarm under the sting.
+    stopQTimer();
+    if (reason === 'timeout' || reason === 'all-answered') {
+      // Clear the underlying view FIRST so the sting fades in over a
+      // clean app background — otherwise you briefly see the question
+      // view sitting behind the overlay during the fade-in.
+      Object.keys(views).forEach(function (k) {
+        views[k].classList.remove('active', 'fading-out');
+      });
+      // Small beat on blank, then the sting.
+      setTimeout(function () { playSting(reason); }, 120);
+      // Reveal renders after the sting fades out + a short blank breath.
+      setTimeout(function () { renderReveal(r); }, 120 + STING_VISIBLE_MS + 350);
+    } else {
+      renderReveal(r);
+    }
+  });
   socket.on('state:final', renderFinal);
   socket.on('state:intro', renderIntro);
   socket.on('state:prompt', renderPrompt);
@@ -1092,6 +1243,8 @@
         stopQTimer();
         stopIntroTimer();
         document.body.classList.remove('host-prompt-only');
+        reactionsMuted = !!res.reactionsMuted;
+        updateMuteReactionsBtn();
         enterLobby(res);
       }
     });

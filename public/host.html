@@ -16,6 +16,7 @@
       <div class="brand">Carly <span class="amp">&</span> Nick · Wedding Quiz</div>
       <div class="controls">
         <button id="musicBtn" class="btn-ghost" title="Toggle lobby music">♪ Music</button>
+        <button id="muteReactionsBtn" class="btn-ghost" title="Mute player reactions">🔔 Reactions</button>
         <button id="fullscreenBtn" class="btn-ghost">⛶ Fullscreen</button>
         <button id="resetBtn" class="btn-ghost" title="Reset the whole game">Reset</button>
       </div>
@@ -111,6 +112,13 @@
 
   <!-- Floating reaction emojis from players -->
   <div class="reaction-layer" id="reactionLayer" aria-hidden="true"></div>
+
+  <!-- Brief full-screen "sting" overlay shown for ~1.2s between QUESTION
+       and REVEAL ("Time's up!" on timeout, "Let's see the answers!" when
+       everyone answered early). -->
+  <div class="sting-overlay" id="stingOverlay" aria-hidden="true">
+    <div class="sting-text" id="stingText"></div>
+  </div>
 
   <footer class="credit-footer">Developed by Nick Liu (with help from Claude)</footer>
 

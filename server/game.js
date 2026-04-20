@@ -239,10 +239,14 @@ class Game {
   _clearTimer() { this._clearTimers(); }
 
   /** Force-end current question and move to REVEAL. Idempotent. */
-  _endQuestion(_reason) {
+  _endQuestion(reason) {
     if (this.phase !== PHASES.QUESTION) return;
     this._clearTimers();
     this.phase = PHASES.REVEAL;
+    // Remember WHY the question ended so the transport layer can pick the
+    // right "sting" copy on the reveal screen ("Time's up!" vs.
+    // "Let's see the answers!"). Defaults to 'host' for the manual case.
+    this.lastEndReason = reason || 'host';
     if (typeof this.onQuestionTimeout === 'function') {
       try { this.onQuestionTimeout(); } catch (_) { /* swallow */ }
     }

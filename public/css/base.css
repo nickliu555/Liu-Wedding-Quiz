@@ -57,6 +57,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary { background: var(--green-deep); }
 .btn-accent  { background: var(--pink-deep); }
 .btn-ghost   { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+.btn-ghost.btn-muted { background: var(--pink-deep); color: white; border-color: var(--pink-deep); }
 
 input[type="text"] {
   font-family: inherit;

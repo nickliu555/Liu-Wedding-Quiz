@@ -300,6 +300,10 @@
   let reactionsAllowed = false;
   let reactionUntilMs = 0;
   let reactionCountdownTimer = null;
+  // True when the host has globally muted reactions. Independent of the
+  // per-phase `reactionsAllowed` gate — when muted, the bar is shown but
+  // the buttons stay grayed out.
+  let reactionsMutedByHost = false;
 
   // Restore any in-flight cooldown from a previous page load.
   (function restoreReactionCooldown() {
@@ -327,9 +331,12 @@
   function updateReactionButtonState() {
     const now = Date.now();
     const onCooldown = now < reactionUntilMs;
-    const disabled = !reactionsAllowed || onCooldown || rejected;
+    const disabled = !reactionsAllowed || onCooldown || rejected || reactionsMutedByHost;
     reactionBtns.forEach(function (b) { b.disabled = disabled; });
-    if (onCooldown && reactionsAllowed) {
+    if (reactionsMutedByHost && reactionsAllowed) {
+      reactionCooldownEl.hidden = false;
+      reactionCooldownEl.textContent = 'Reactions paused by host';
+    } else if (onCooldown && reactionsAllowed) {
       const sec = Math.ceil((reactionUntilMs - now) / 1000);
       reactionCooldownEl.hidden = false;
       reactionCooldownEl.textContent = sec + 's';
@@ -390,6 +397,8 @@
       }
       elName.textContent = res.player.name;
       elScore.textContent = res.player.score || 0;
+      reactionsMutedByHost = !!res.reactionsMuted;
+      updateReactionButtonState();
       if (res.phase === 'LOBBY') { setReactionsAllowed(true); renderLobbyWaiting(); }
       else if (res.phase === 'INTRO') {
         setReactionsAllowed(false);
@@ -443,6 +452,13 @@
     }
   });
 
+  // Host has muted/unmuted all player reactions. Bar stays visible but the
+  // buttons are grayed out with a "paused by host" label until unmuted.
+  socket.on('state:reactionsMuted', function (p) {
+    reactionsMutedByHost = !!(p && p.muted);
+    updateReactionButtonState();
+  });
+
   socket.on('state:question', function (q) {
     if (rejected) return;
     setReactionsAllowed(false);
@@ -461,20 +477,74 @@
     renderPrompt(p);
   });
 
-  socket.on('state:reveal', function () {
+  // When the host plays the "Time's up!" / "Let's see the answers!" sting,
+  // we hold the player's screen on its previous state until the sting clears
+  // so the small screen doesn't transition ahead of the big screen.
+  // Host timing: 120ms blank + ~250ms fade-in + 2200ms hold + 350ms fade-out
+  //            + ~550ms into the slow reveal fade-in = ~3470ms.
+  var REVEAL_HOLD_MS = 3200;
+  var pendingResult = null;
+  var holdRevealUntil = 0;
+
+  function applyReveal() {
     if (rejected) return;
     setReactionsAllowed(true);
+    if (!lastResult || (currentQuestion && lastResult.questionId !== currentQuestion.id)) {
+      render('<h2 class="serif">Hold tight…</h2><p>Results on the big screen.</p>');
+    }
+    if (pendingResult) {
+      var res = pendingResult;
+      pendingResult = null;
+      lastResult = res;
+      elScore.textContent = res.totalScore;
+      renderResult(res);
+    }
+  }
+
+  socket.on('state:reveal', function (r) {
+    if (rejected) return;
     stopCountdown();
-    setTimeout(function () {
-      if (rejected) return;
-      if (!lastResult || (currentQuestion && lastResult.questionId !== currentQuestion.id)) {
-        render('<h2 class="serif">Hold tight…</h2><p>Results on the big screen.</p>');
-      }
-    }, 400);
+    // The countdown was just frozen mid-tick (often at "1s" because Math.ceil
+    // rounds the final fractional second up). Snap it to "0s" so the player's
+    // screen doesn't sit on a stale value during the sting hold. Keep the
+    // .urgent class on the pill so it stays red at 0s.
+    var pill = document.getElementById('pcountdown');
+    if (pill) {
+      pill.textContent = '0s';
+      pill.classList.add('urgent');
+    }
+    document.body.classList.remove('urgent');
+    var reason = r && r.endReason;
+    // If THIS player never submitted an answer for the current question and
+    // time ran out, skip the sting hold — there's no "answer locked in"
+    // screen to preserve, so jump straight to the "Too slow!" result.
+    var didNotAnswer =
+      reason === 'timeout' &&
+      currentQuestion &&
+      answeredQuestionId !== currentQuestion.id;
+    if (didNotAnswer) {
+      holdRevealUntil = 0;
+      setTimeout(applyReveal, 0);
+    } else if (reason === 'timeout' || reason === 'all-answered') {
+      // Hold the previous screen until the host's sting overlay clears.
+      holdRevealUntil = Date.now() + REVEAL_HOLD_MS;
+      setTimeout(applyReveal, REVEAL_HOLD_MS);
+    } else {
+      // 'host' (manual advance) or 'replay' — no sting, transition normally.
+      holdRevealUntil = 0;
+      setTimeout(applyReveal, 400);
+    }
   });
 
   socket.on('player:result', function (res) {
     if (rejected) return;
+    var wait = holdRevealUntil - Date.now();
+    if (wait > 0) {
+      // Sting is still playing on the host — queue this result and let
+      // applyReveal() render it when the hold expires.
+      pendingResult = res;
+      return;
+    }
     lastResult = res;
     elScore.textContent = res.totalScore;
     renderResult(res);
