@@ -108,6 +108,10 @@ body.host {
 }
 #view-reveal.active .bars            { animation-delay: 0.7s; }
 #view-reveal.active .leaderboard-panel { animation-delay: 0.95s; }
+#view-reveal.active .reveal-actions {
+  animation: revealPanelIn 0.9s cubic-bezier(.2, .7, .25, 1) both;
+  animation-delay: 0.95s;
+}
 @keyframes revealPanelIn {
   from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0);    }
@@ -189,7 +193,7 @@ body.host {
 }
 .question-prompt {
   font-family: var(--font-serif); font-size: clamp(32px, 4.6vw, 58px); line-height: 1.2;
-  margin: 0 auto 20px; max-width: 1100px;
+  margin: 0 auto 20px; max-width: min(1100px, 72vw);
 }
 .question-image {
   max-width: min(500px, 40vw); max-height: 30vh; border-radius: var(--radius);
@@ -605,7 +609,9 @@ body.host.host-prompt-only #view-question .question-prompt {
   /* Combine scale-up with a downward shift so the prompt sits closer to
      the optical center of the screen while it's the only thing visible.
      Using transform (vs. margin) keeps the transition smooth and avoids
-     any layout jump when the choices fade in. */
+     any layout jump when the choices fade in. Note: max-width is the same
+     as the normal state so line wrapping stays identical — transform: scale
+     only changes visual size, not where the text wraps. */
   transform: translateY(8vh) scale(1.35);
 }
 body.host.host-prompt-only #view-question .answer-grid,

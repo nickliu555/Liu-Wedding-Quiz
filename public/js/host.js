@@ -776,7 +776,7 @@
     const endsAt = (payload && payload.endsAt) || (Date.now() + 5000);
     function tick() {
       const left = Math.max(0, Math.ceil((endsAt - serverNow()) / 1000));
-      if (introCountdown) introCountdown.textContent = String(left || 'Go!');
+      if (introCountdown) introCountdown.textContent = left <= 0 ? 'Go!' : String(left);
       if (left <= 0) stopIntroTimer();
     }
     tick();

@@ -54,7 +54,7 @@
     const el = document.getElementById('pIntroCountdown');
     function tick() {
       const left = Math.max(0, Math.ceil((endsAt - serverNow()) / 1000));
-      if (el) el.textContent = String(left || 'Go!');
+      if (el) el.textContent = left <= 0 ? 'Go!' : String(left);
       if (left <= 0) stopIntroTimer();
     }
     tick();
@@ -523,8 +523,12 @@
       currentQuestion &&
       answeredQuestionId !== currentQuestion.id;
     if (didNotAnswer) {
+      // Hold on the question screen for a beat so the player actually
+      // sees the timer pill snap to 0s before "Too slow!" replaces it —
+      // gives them a clear "you ran out" moment instead of cutting
+      // straight from "1s" to the result card.
       holdRevealUntil = 0;
-      setTimeout(applyReveal, 0);
+      setTimeout(applyReveal, 600);
     } else if (reason === 'timeout' || reason === 'all-answered') {
       // Hold the previous screen until the host's sting overlay clears.
       holdRevealUntil = Date.now() + REVEAL_HOLD_MS;

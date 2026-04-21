@@ -17,7 +17,10 @@ const PHASES = {
 };
 
 const MAX_NAME_LEN = 20;
-const INTRO_DURATION_MS = 5000;
+const INTRO_DURATION_MS = 4000;
+// After the countdown reaches 0 the splash sits on "Go!" for a brief beat
+// before we transition into the first question's PROMPT phase.
+const INTRO_GO_HOLD_MS = 1100;
 const PROMPT_DURATION_MS = 3000;
 
 /**
@@ -174,7 +177,7 @@ class Game {
     this._phaseTimer = setTimeout(() => {
       this._phaseTimer = null;
       this._endIntro();
-    }, INTRO_DURATION_MS + 50);
+    }, INTRO_DURATION_MS + INTRO_GO_HOLD_MS);
     return { ok: true, phase: PHASES.INTRO };
   }
 
