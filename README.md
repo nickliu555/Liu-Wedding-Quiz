@@ -1,7 +1,7 @@
 # Liu Wedding Quiz
 
 A Kahoot-style real-time quiz web app for ~150 wedding guests. Guests scan a QR code on the big
-screen, enter a name on their phone, and answer 4-choice time-pressured questions. A host laptop
+screen, enter a name on their phone, and answer multiple-choice time-pressured questions. A host laptop
 drives the projector view (lobby, question, live answer distribution, top-5 leaderboard between
 questions, top-3 podium reveal at the end). Faster correct answers score more points.
 
