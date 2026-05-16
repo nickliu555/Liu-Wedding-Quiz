@@ -3,6 +3,47 @@
 
   const socket = io({ transports: ['polling', 'websocket'] });
 
+  // ---------------- Settings popover ----------------
+  // Wires up the ⚙ Settings dropdown in the topbar. Clicking the button
+  // toggles the panel; clicking outside closes it. Buttons inside the
+  // panel close it after firing, *unless* they opt out with the
+  // `data-settings-keep-open` attribute (used by toggles like Music and
+  // Reactions that the host may flip multiple times in a row).
+  (function wireSettingsPopover() {
+    const btn = document.getElementById('settingsBtn');
+    const panel = document.getElementById('settingsPanel');
+    if (!btn || !panel) return;
+    function close() {
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    function open() {
+      panel.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (panel.hidden) open(); else close();
+    });
+    document.addEventListener('click', function (e) {
+      if (panel.hidden) return;
+      if (e.target.closest('#settingsPanel')) {
+        // Click on a panel action: close unless it opts out.
+        const action = e.target.closest('button, a');
+        if (action && !action.hasAttribute('data-settings-keep-open')) {
+          // Defer so the button's own handler runs first.
+          setTimeout(close, 0);
+        }
+        return;
+      }
+      if (e.target.closest('#settingsBtn')) return;
+      close();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !panel.hidden) close();
+    });
+  })();
+
   // ---------------- Element refs ----------------
   const views = {
     lobby: document.getElementById('view-lobby'),
@@ -160,16 +201,31 @@
   });
 
   // ---------------- Fullscreen ----------------
+  // Safari still ships the webkit-prefixed APIs, so prefer the standard one
+  // and fall back if missing. Called synchronously inside the click so the
+  // browser's transient activation requirement is satisfied.
   fullscreenBtn.addEventListener('click', function () {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(function(){});
-    } else {
-      document.exitFullscreen();
-    }
+    const el = document.documentElement;
+    const inFs = document.fullscreenElement || document.webkitFullscreenElement;
+    try {
+      if (!inFs) {
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) {
+          const p = req.call(el);
+          if (p && typeof p.catch === 'function') p.catch(function () {});
+        }
+      } else {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) exit.call(document);
+      }
+    } catch (_) { /* swallow */ }
   });
-  document.addEventListener('fullscreenchange', function () {
-    fullscreenBtn.textContent = document.fullscreenElement ? '⛶ Exit' : '⛶ Fullscreen';
-  });
+  function syncFullscreenLabel() {
+    const inFs = document.fullscreenElement || document.webkitFullscreenElement;
+    fullscreenBtn.textContent = inFs ? '⛶ Exit' : '⛶ Fullscreen';
+  }
+  document.addEventListener('fullscreenchange', syncFullscreenLabel);
+  document.addEventListener('webkitfullscreenchange', syncFullscreenLabel);
 
   musicBtn.addEventListener('click', function () {
     unlockSfx();
@@ -895,12 +951,16 @@
       const isCorrect = i === r.correctIndex;
       const colorVar = ['--tile-1','--tile-2','--tile-3','--tile-4'][i];
       const choiceText = (q.choices && q.choices[i]) || '';
+      const indicator = isCorrect
+        ? '<div class="row-indicator correct-check" aria-label="Correct answer">✓</div>'
+        : '<div class="row-indicator" aria-hidden="true"></div>';
       return (
         '<div class="bar-row ' + (isCorrect ? 'correct' : '') + '">' +
           '<div class="shape" style="color: var(' + colorVar + ')">' + shapeHTML(i) + '</div>' +
           '<div class="choice-text">' + escapeHtml(choiceText) + '</div>' +
           '<div class="bar"><div class="bar-fill" style="width:' + pct.toFixed(1) + '%; background: var(' + colorVar + ')"></div></div>' +
           '<div class="count">' + count + '</div>' +
+          indicator +
         '</div>'
       );
     }).join('');

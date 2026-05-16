@@ -15,9 +15,19 @@
     <div class="host-topbar">
       <div class="brand">Carly <span class="amp">&</span> Nick · Wedding Quiz</div>
       <div class="controls">
-        <button id="musicBtn" class="btn-ghost" title="Toggle lobby music">♪ Music</button>
-        <button id="muteReactionsBtn" class="btn-ghost" title="Mute player reactions">🔔 Reactions</button>
-        <button id="fullscreenBtn" class="btn-ghost">⛶ Fullscreen</button>
+        <div class="settings-wrapper">
+          <button id="settingsBtn" class="btn-ghost" type="button"
+                  aria-controls="settingsPanel" aria-expanded="false"
+                  title="Settings">⚙️ Settings</button>
+          <div class="settings-panel" id="settingsPanel" hidden>
+            <button id="musicBtn" class="btn-ghost" type="button"
+                    data-settings-keep-open title="Toggle lobby music">♪ Music</button>
+            <button id="muteReactionsBtn" class="btn-ghost" type="button"
+                    data-settings-keep-open title="Mute player reactions">🔔 Reactions</button>
+            <button id="fullscreenBtn" class="btn-ghost" type="button"
+                    title="Toggle fullscreen">⛶ Fullscreen</button>
+          </div>
+        </div>
         <button id="resetBtn" class="btn-ghost" title="Reset the whole game">Reset</button>
       </div>
     </div>

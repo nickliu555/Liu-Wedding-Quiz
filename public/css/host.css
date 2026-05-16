@@ -25,10 +25,39 @@ body.host {
   border-bottom: 1px solid #ece6dd;
   background: rgba(255,255,255,0.6);
   backdrop-filter: blur(6px);
+  /* `backdrop-filter` establishes a stacking context, which would trap the
+     Settings popover behind sibling layers (.host-main, reaction layer,
+     etc.). Promote the whole topbar so its dropdown floats above. */
+  position: relative;
+  z-index: 100;
 }
 .host-topbar .brand { font-size: 26px; }
 .host-topbar .controls { display: flex; gap: 10px; }
 .host-topbar button { padding: 8px 14px; font-size: 14px; }
+
+/* Settings popover: anchors a dropdown under the ⚙ Settings button. */
+.settings-wrapper { position: relative; display: inline-flex; }
+.settings-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid #ece6dd;
+  border-radius: 12px;
+  box-shadow: var(--shadow-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 200;
+}
+.settings-panel[hidden] { display: none; }
+.settings-panel .btn-ghost {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
 
 /* Main view area */
 .host-main {
@@ -284,7 +313,7 @@ body.host {
 .bars h3 { margin: 0 0 14px; }
 .bar-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1.4fr) minmax(0, 2fr) 56px;
+  grid-template-columns: 44px minmax(0, 1.4fr) minmax(0, 2fr) 56px 36px;
   align-items: center;
   gap: 10px; margin: 10px 0;
   padding: 4px 6px;
@@ -305,11 +334,39 @@ body.host {
 }
 .bar-row .count { text-align: right; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .bar-row.correct {
-  background: rgba(79, 107, 84, 0.10);
-  box-shadow: inset 0 0 0 2px var(--green-deep);
+  background: linear-gradient(90deg, rgba(79, 107, 84, 0.20) 0%, rgba(79, 107, 84, 0.08) 100%);
+  box-shadow: inset 0 0 0 3px var(--green-deep), 0 4px 18px rgba(79, 107, 84, 0.18);
 }
-.bar-row.correct .choice-text { color: var(--green-deep); font-weight: 700; }
-.bar-row:not(.correct) { opacity: 0.85; }
+.bar-row.correct .choice-text { color: var(--green-deep); font-weight: 800; }
+.bar-row:not(.correct) {
+  opacity: 0.55;
+  filter: grayscale(0.35);
+}
+/* Reserved indicator column at the end of every row, so text and bar lengths
+   stay aligned across rows. Empty on wrong rows; a green check appears on
+   the correct row. */
+.row-indicator {
+  width: 36px;
+  height: 36px;
+}
+.correct-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--green-deep);
+  color: white;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(79, 107, 84, 0.45);
+  animation: correctBadgePop 0.5s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+@keyframes correctBadgePop {
+  0%   { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+  60%  { transform: scale(1.2)  rotate(2deg);  opacity: 1; }
+  100% { transform: scale(1)    rotate(0);     opacity: 1; }
+}
 
 .leaderboard-panel {
   background: var(--surface); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow);
