@@ -896,32 +896,41 @@
   function startQTimer(q) {
     stopQTimer();
     if (typeof q.serverNow === 'number') clockOffset = q.serverNow - Date.now();
+    // rAF-driven update loop: vsync-granular ticks (~16ms) so the conic
+    // ring animates smoothly AND the displayed second flips within one
+    // frame of the true `endsAt` boundary. Combined with the server-clock
+    // offset, this keeps the host and player phones flipping the second
+    // counter within a vsync of each other — much tighter than the old
+    // 100ms setInterval drift window.
+    let lastSecShown = null;
     const update = function () {
+      qTimer = null;
       const msLeft = Math.max(0, q.endsAt - serverNow());
       const secLeft = Math.ceil(msLeft / 1000);
       const pct = Math.max(0, (msLeft / (q.timeLimitSec * 1000)) * 100);
-      timerText.textContent = String(secLeft);
+      if (secLeft !== lastSecShown) {
+        lastSecShown = secLeft;
+        timerText.textContent = String(secLeft);
+        if (secLeft <= 5 && msLeft > 0) {
+          timerRing.classList.add('urgent');
+        } else {
+          timerRing.classList.remove('urgent');
+        }
+        // Tick once per whole second when 5..1 remain (each louder), then a
+        // longer "time's up" alarm beep at 0.
+        if (secLeft >= 0 && secLeft <= 5 && secLeft !== lastTickSec) {
+          lastTickSec = secLeft;
+          playTick(secLeft);
+        }
+      }
       timerRing.style.setProperty('--pct', pct.toFixed(1));
-      // Mirror the player's urgent cue on the host: when <=5s remain, turn
-      // the timer pink and pulse it so the room feels the pressure too.
-      if (secLeft <= 5 && msLeft > 0) {
-        timerRing.classList.add('urgent');
-      } else {
-        timerRing.classList.remove('urgent');
-      }
-      // Tick once per whole second when 5..1 remain (each louder), then a
-      // longer "time's up" alarm beep at 0.
-      if (secLeft >= 0 && secLeft <= 5 && secLeft !== lastTickSec) {
-        lastTickSec = secLeft;
-        playTick(secLeft);
-      }
-      if (msLeft <= 0) stopQTimer();
+      if (msLeft <= 0) { stopQTimer(); return; }
+      qTimer = requestAnimationFrame(update);
     };
-    update();
-    qTimer = setInterval(update, 100);
+    qTimer = requestAnimationFrame(update);
   }
   function stopQTimer() {
-    if (qTimer) { clearInterval(qTimer); qTimer = null; }
+    if (qTimer) { cancelAnimationFrame(qTimer); qTimer = null; }
     if (timerRing) timerRing.classList.remove('urgent');
   }
 

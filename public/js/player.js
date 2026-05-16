@@ -203,54 +203,65 @@
     urgentClassAdded = false;
     haptic5Fired = false;
     haptic2Fired = false;
-    countdownInterval = setInterval(function () {
+    // rAF-driven loop: flips the displayed second within one vsync frame
+    // (~16ms) of the true server-anchored boundary, keeping the player's
+    // counter in lockstep with the host's instead of drifting up to a
+    // full setInterval cycle behind.
+    let lastShown = null;
+    function tick() {
+      countdownInterval = null;
       if (!currentQuestion) return stopCountdown();
       const el = document.getElementById('pcountdown');
       if (!el) return stopCountdown();
-      const left = Math.max(0, Math.ceil((currentQuestion.endsAt - serverNow()) / 1000));
-      el.textContent = left + 's';
+      const msLeftPrecise = Math.max(0, currentQuestion.endsAt - serverNow());
+      const left = Math.ceil(msLeftPrecise / 1000);
+      if (left !== lastShown) {
+        lastShown = left;
+        el.textContent = left + 's';
 
-      // Subtle "you haven't answered yet" cues — only fire while the player
-      // still hasn't submitted for this question.
-      const stillAnswering =
-        !answeredQuestionId || answeredQuestionId !== currentQuestion.id;
+        // Subtle "you haven't answered yet" cues — only fire while the
+        // player still hasn't submitted for this question.
+        const stillAnswering =
+          !answeredQuestionId || answeredQuestionId !== currentQuestion.id;
 
-      if (stillAnswering && left <= 5 && left > 0) {
-        if (!urgentClassAdded) {
-          urgentClassAdded = true;
-          document.body.classList.add('urgent');
-          el.classList.add('urgent');
-          // Sync the drain-bar animation to the actual time remaining: if
-          // we entered the urgent window mid-animation (e.g. on refresh),
-          // jump the 5s animation forward by the elapsed amount via a
-          // negative animation-delay.
-          const bar = document.getElementById('urgentBar');
-          if (bar) {
-            const msLeftPrecise = Math.max(0, currentQuestion.endsAt - serverNow());
-            const elapsedInUrgent = 5000 - msLeftPrecise;
-            bar.style.animationDelay = '-' + (elapsedInUrgent / 1000).toFixed(2) + 's';
+        if (stillAnswering && left <= 5 && left > 0) {
+          if (!urgentClassAdded) {
+            urgentClassAdded = true;
+            document.body.classList.add('urgent');
+            el.classList.add('urgent');
+            // Sync the drain-bar animation to the actual time remaining:
+            // if we entered the urgent window mid-animation (e.g. on
+            // refresh), jump the 5s animation forward by the elapsed
+            // amount via a negative animation-delay.
+            const bar = document.getElementById('urgentBar');
+            if (bar) {
+              const elapsedInUrgent = 5000 - msLeftPrecise;
+              bar.style.animationDelay = '-' + (elapsedInUrgent / 1000).toFixed(2) + 's';
+            }
           }
+          if (left <= 5 && !haptic5Fired) {
+            haptic5Fired = true;
+            tryVibrate(50);
+          }
+          if (left <= 2 && !haptic2Fired) {
+            haptic2Fired = true;
+            tryVibrate([90, 60, 90]);
+          }
+        } else if (urgentClassAdded && (!stillAnswering || left <= 0)) {
+          // Player answered or time ran out — clear the cue immediately.
+          urgentClassAdded = false;
+          document.body.classList.remove('urgent');
+          el.classList.remove('urgent');
         }
-        if (left <= 5 && !haptic5Fired) {
-          haptic5Fired = true;
-          tryVibrate(50);
-        }
-        if (left <= 2 && !haptic2Fired) {
-          haptic2Fired = true;
-          tryVibrate([90, 60, 90]);
-        }
-      } else if (urgentClassAdded && (!stillAnswering || left <= 0)) {
-        // Player answered or time ran out — clear the cue immediately.
-        urgentClassAdded = false;
-        document.body.classList.remove('urgent');
-        el.classList.remove('urgent');
       }
 
-      if (left <= 0) stopCountdown();
-    }, 250);
+      if (msLeftPrecise <= 0) return stopCountdown();
+      countdownInterval = requestAnimationFrame(tick);
+    }
+    countdownInterval = requestAnimationFrame(tick);
   }
   function stopCountdown() {
-    if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+    if (countdownInterval) { cancelAnimationFrame(countdownInterval); countdownInterval = null; }
     document.body.classList.remove('urgent');
     const el = document.getElementById('pcountdown');
     if (el) el.classList.remove('urgent');
