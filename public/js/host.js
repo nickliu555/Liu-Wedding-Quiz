@@ -1113,72 +1113,49 @@
       //    so it covers the score climb + tension hold without a silent
       //    gap — but capped just under 4s so the mp3's cymbal crash near
       //    its tail doesn't fire mid-reveal.
-      var WINNER_SCORE_MS = 700;   // shorter score climb for the winner
-      var WINNER_HOLD_MS  = 300;   // brief beat between score lock + name
-      var rollDur = slot.isWinner
-        ? (SUSPENSE_MS + WINNER_SCORE_MS + WINNER_HOLD_MS) / 1000
-        : SUSPENSE_MS / 1000;
+      var rollDur = SUSPENSE_MS / 1000;
       setTimeout(function () {
         slot.el.classList.add('visible');
         var stopRoll = playDrumroll(rollDur);
-        // 2. After suspense, reveal in two beats for the winner (score
-        //    first, then name) for a classic "with 4,200 points… NICK!"
-        //    moment. 2nd/3rd reveal name+score together to keep the
-        //    sequence snappy.
+        // After suspense ends, reveal name + score together for every spot
+        // (winner included). Previously the winner had a two-beat reveal
+        // — score rolled first, name appeared ~1s later — which felt like
+        // lag rather than tension. Now every podium spot reveals the same
+        // way; the winner still gets the extra cheer/confetti/banner.
         setTimeout(function () {
           var nameEl = slot.el.querySelector('.name');
           var scoreEl = slot.el.querySelector('.score');
           var finalScore = scoreEl ? parseInt(scoreEl.dataset.finalScore || '0', 10) : 0;
 
+          if (typeof stopRoll === 'function') stopRoll();
+          if (nameEl) {
+            nameEl.textContent = nameEl.dataset.finalName || (slot.entry.name || '');
+            nameEl.classList.add('revealed');
+          }
+          slot.el.classList.remove('suspense');
+          slot.el.classList.add('revealed');
+          playCheerChord(slot.tier);
+          if (scoreEl) animateScoreCount(scoreEl, finalScore, SCORE_ROLL_MS);
+
           if (slot.isWinner) {
-            // Roll the score up while the name stays as suspense dots.
-            // Drumroll keeps going underneath — no silent gap.
-            if (scoreEl) {
-              scoreEl.classList.add('rolling');
-              animateScoreCount(scoreEl, finalScore, WINNER_SCORE_MS);
+            confettiBurst();
+            playApplause(4);
+            // Drop the big "🎉 Congratulations! 🎉" banner only now — having
+            // it sit at the top during the suspense reveal would spoil the
+            // climax. It bounces in just as the winner lands, riding the
+            // same confetti/applause moment.
+            var congrats = document.getElementById('finalCongrats');
+            if (congrats) {
+              setTimeout(function () { congrats.classList.add('visible'); }, 250);
             }
-            // After the score lands + a brief hold, reveal the name.
-            setTimeout(function () {
-              if (scoreEl) scoreEl.classList.remove('rolling');
-              if (typeof stopRoll === 'function') stopRoll();
-              if (nameEl) {
-                nameEl.textContent = nameEl.dataset.finalName || (slot.entry.name || '');
-                nameEl.classList.add('revealed');
-              }
-              slot.el.classList.remove('suspense');
-              slot.el.classList.add('revealed');
-              playCheerChord(slot.tier);
-              confettiBurst();
-              playApplause(4);
-              // Drop the big "🎉 Congratulations! 🎉" banner in only NOW —
-              // having it sit at the top during the suspense reveal would
-              // spoil the climax. It bounces in just as the winner lands,
-              // riding the same confetti/applause moment.
-              var congrats = document.getElementById('finalCongrats');
-              if (congrats) {
-                setTimeout(function () { congrats.classList.add('visible'); }, 250);
-              }
-              // Now the full standings can come up — they no longer spoil
-              // anything since the winner is revealed.
-              setTimeout(function () { fullLb.classList.add('visible'); }, 1100);
-            }, WINNER_SCORE_MS + WINNER_HOLD_MS);
-          } else {
-            if (typeof stopRoll === 'function') stopRoll();
-            if (nameEl) {
-              nameEl.textContent = nameEl.dataset.finalName || (slot.entry.name || '');
-              nameEl.classList.add('revealed');
-            }
-            slot.el.classList.remove('suspense');
-            slot.el.classList.add('revealed');
-            playCheerChord(slot.tier);
-            if (scoreEl) animateScoreCount(scoreEl, finalScore, SCORE_ROLL_MS);
+            // Now the full standings can come up — they no longer spoil
+            // anything since the winner is revealed.
+            setTimeout(function () { fullLb.classList.add('visible'); }, 1100);
           }
         }, SUSPENSE_MS);
       }, cursor);
 
       cursor += SUSPENSE_MS + REVEAL_HOLD_MS;
-      // Winner gets the extra score-roll + hold beat before the name pop.
-      if (slot.isWinner) cursor += WINNER_SCORE_MS + WINNER_HOLD_MS;
     });
   }
 
