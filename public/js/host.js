@@ -321,13 +321,59 @@
   }
 
   // ---------------- Lobby ----------------
+  // Track which players we've already seen so newly-arriving guests get a
+  // sparkle/bounce-in animation while existing chips just re-render. The
+  // very first lobby paint (e.g. host reloads mid-party) is treated as a
+  // "warm start" so we don't sparkle the whole roster at once.
+  const knownPids = new Set();
+  let lobbyFirstRender = true;
+  let lastPlayerCount = 0;
+
+  // Stable per-name color index so each player keeps the same avatar tint
+  // across re-renders. 5 wedding-palette tints in CSS via .avatar-c0..c4.
+  function avatarColorIndex(name) {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return h % 5;
+  }
+  function initialOf(name) {
+    const s = (name || '').trim();
+    if (!s) return '?';
+    // Grab the first letter of the first word; uppercased.
+    return s.charAt(0).toUpperCase();
+  }
+
   function renderLobby(s) {
     const players = s.players || [];
+    // Heart-pulse the count badge whenever the roster grows.
+    if (players.length > lastPlayerCount) {
+      playerCount.classList.remove('bumped');
+      // Force reflow so the animation restarts even on consecutive joins.
+      void playerCount.offsetWidth;
+      playerCount.classList.add('bumped');
+    }
+    lastPlayerCount = players.length;
     playerCount.textContent = players.length;
+
     playerList.innerHTML = players.map(function (p) {
-      const cls = 'player-chip' + (p.connected ? '' : ' disconnected');
-      return '<div class="' + cls + '" data-pid="' + p.id + '" title="Click to remove">' + escapeHtml(p.name) + '</div>';
+      const isNew = !lobbyFirstRender && !knownPids.has(p.id);
+      const classes = ['player-chip', 'avatar-c' + avatarColorIndex(p.name)];
+      if (!p.connected) classes.push('disconnected');
+      if (isNew) classes.push('is-new');
+      return (
+        '<div class="' + classes.join(' ') + '" data-pid="' + p.id + '" title="Click to remove">' +
+          '<span class="avatar" aria-hidden="true">' + escapeHtml(initialOf(p.name)) + '</span>' +
+          '<span class="name">' + escapeHtml(p.name) + '</span>' +
+          (isNew ? '<span class="sparkle" aria-hidden="true">✨</span>' : '') +
+        '</div>'
+      );
     }).join('');
+
+    // Remember everyone we've shown so they don't sparkle on the next paint.
+    knownPids.clear();
+    players.forEach(function (p) { knownPids.add(p.id); });
+    lobbyFirstRender = false;
+
     startBtn.disabled = players.length === 0;
   }
 
@@ -335,7 +381,10 @@
     const chip = e.target.closest('.player-chip');
     if (!chip) return;
     const pid = chip.dataset.pid;
-    const name = chip.textContent;
+    // The chip now wraps an avatar + name; grab the explicit .name node so we
+    // don't pick up the avatar letter (and the sparkle) in the confirm copy.
+    const nameEl = chip.querySelector('.name');
+    const name = nameEl ? nameEl.textContent : chip.textContent;
     showInlineConfirm('Remove "' + name + '" from the game?', function () {
       socket.emit('host:kick', { playerId: pid });
     });
@@ -849,6 +898,12 @@
     stopQTimer();
     stopIntroTimer();
     show('question');
+    // For the very last question, briefly show a "💍 Final Question!" splash
+    // before the prompt content becomes readable. The server has padded
+    // this prompt phase with extra time so the regular cadence is preserved.
+    if (p && p.isLastQuestion) {
+      showFinalQuestionSting();
+    }
     qIndex.textContent = (p.index + 1);
     qTotal.textContent = p.total;
     qPrompt.textContent = p.prompt;
@@ -891,6 +946,32 @@
     if (p && typeof p.serverNow === 'number') {
       clockOffset = p.serverNow - Date.now();
     }
+  }
+
+  // "💍 Final Question!" splash, shown over the prompt phase of the very
+  // last question. Reuses the existing #stingOverlay node but with a
+  // dedicated `final-question` class so it can be styled (and animated)
+  // differently from the per-question "Time's up!" sting.
+  function showFinalQuestionSting() {
+    const ov = document.getElementById('stingOverlay');
+    const txt = document.getElementById('stingText');
+    if (!ov || !txt) return;
+    txt.textContent = '💍 Final Question';
+    ov.classList.remove('timeout', 'all-answered');
+    // Hide the prompt content underneath so it doesn't peek through.
+    document.body.classList.add('host-final-intro');
+    document.body.classList.remove('host-final-intro-fading');
+    ov.classList.add('visible', 'final-question');
+    // Hold, then start the splash leaving while the prompt fades in.
+    setTimeout(function () {
+      ov.classList.remove('visible');
+      document.body.classList.add('host-final-intro-fading');
+    }, 3700);
+    // Once the leave transition is done, clean up classes.
+    setTimeout(function () {
+      ov.classList.remove('final-question');
+      document.body.classList.remove('host-final-intro', 'host-final-intro-fading');
+    }, 5200);
   }
 
   function startQTimer(q) {

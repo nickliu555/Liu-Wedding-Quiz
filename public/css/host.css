@@ -155,6 +155,8 @@ body.host {
 
 /* ---- Lobby ---- */
 .lobby-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   gap: 40px;
@@ -191,25 +193,99 @@ body.host {
 .players-panel .count {
   background: var(--green-deep); color: white; padding: 4px 12px; border-radius: 999px;
   font-weight: 700;
+  transition: transform 0.2s ease;
 }
+/* Heart-pulse when a new guest joins. */
+.players-panel .count.bumped { animation: countHeartPulse 0.8s cubic-bezier(.2, 1, .3, 1); }
+@keyframes countHeartPulse {
+  0%   { transform: scale(1);    background: var(--green-deep); }
+  20%  { transform: scale(1.28); background: var(--pink-deep); }
+  40%  { transform: scale(0.96); background: var(--green-deep); }
+  60%  { transform: scale(1.14); background: var(--pink-deep); }
+  100% { transform: scale(1);    background: var(--green-deep); }
+}
+
 .player-list {
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
   align-content: flex-start;
+  /* A tiny bit of inner padding so the chip's box-shadow doesn't get clipped
+     against the scrollable container's edges. */
+  padding: 4px 2px;
 }
 .player-chip {
-  background: var(--bg);
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface);
   border: 1.5px solid #ece6dd;
-  padding: 10px 12px; border-radius: 10px;
-  font-weight: 600; text-align: center; cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  padding: 8px 12px 8px 8px; border-radius: 999px;
+  font-weight: 600; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+.player-chip:hover { background: #fce8ed; border-color: var(--pink-deep); transform: translateY(-1px); box-shadow: var(--shadow); }
+.player-chip.disconnected { opacity: 0.5; font-style: italic; }
+
+.player-chip .avatar {
+  flex: 0 0 auto;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-serif); font-weight: 700; font-size: 18px;
+  color: white;
+  background: var(--green-deep);
+  box-shadow: inset 0 -2px 6px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(31, 42, 36, 0.18);
+  letter-spacing: 0;
+}
+.player-chip .name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.player-chip:hover { background: #fce8ed; border-color: var(--pink-deep); }
-.player-chip.disconnected { opacity: 0.5; font-style: italic; }
+.player-chip.avatar-c0 .avatar { background: var(--pink-deep); }
+.player-chip.avatar-c1 .avatar { background: var(--green-deep); }
+.player-chip.avatar-c2 .avatar { background: var(--gold); color: #2a210f; }
+.player-chip.avatar-c3 .avatar { background: var(--tile-3); }
+.player-chip.avatar-c4 .avatar { background: #b07a8a; }
+
+/* New-join animation: gentle bounce-in, soft gold ring sweep, and a sparkle
+   emoji that fades up and out. */
+.player-chip.is-new { animation: chipJoinIn 0.7s cubic-bezier(.2, 1.2, .3, 1) both; }
+.player-chip.is-new::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 0 rgba(201, 169, 110, 0.55);
+  animation: chipJoinRing 1.1s ease-out both;
+}
+.player-chip .sparkle {
+  position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%) scale(0.6);
+  font-size: 16px; pointer-events: none;
+  animation: chipJoinSparkle 1.4s ease-out both;
+}
+@keyframes chipJoinIn {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.85); }
+  60%  { opacity: 1; transform: translateY(0)    scale(1.04); }
+  100% { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes chipJoinRing {
+  0%   { box-shadow: 0 0 0 0   rgba(201, 169, 110, 0.55); }
+  100% { box-shadow: 0 0 0 14px rgba(201, 169, 110, 0); }
+}
+@keyframes chipJoinSparkle {
+  0%   { opacity: 0; transform: translate(0, -50%) scale(0.4) rotate(-12deg); }
+  35%  { opacity: 1; transform: translate(-2px, -70%) scale(1.1) rotate(6deg); }
+  100% { opacity: 0; transform: translate(-6px, -120%) scale(0.7) rotate(18deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-chip.is-new,
+  .player-chip.is-new::before,
+  .player-chip .sparkle,
+  .players-panel .count.bumped { animation: none; }
+}
 
 .lobby-actions { margin-top: 18px; text-align: center; }
 .lobby-actions button { font-size: 22px; padding: 18px 36px; }
@@ -311,6 +387,31 @@ body.host {
   box-shadow: var(--shadow);
 }
 .bars h3 { margin: 0 0 14px; }
+
+/* Reveal panel headers — lowercase serif with a hairline gold underline,
+   so "answers" / "top five" read like wedding-program section labels. */
+.bars h3.section-title,
+.leaderboard-panel h3.section-title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-style: italic;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  color: var(--green-deep);
+  position: relative;
+  padding-bottom: 8px;
+  margin: 0 0 16px;
+}
+.bars h3.section-title::after,
+.leaderboard-panel h3.section-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 44px;
+  height: 1.5px;
+  background: linear-gradient(to right, var(--gold), rgba(201, 169, 110, 0));
+}
 .bar-row {
   display: grid;
   grid-template-columns: 44px minmax(0, 1.4fr) minmax(0, 2fr) 56px 36px;
@@ -748,3 +849,44 @@ body.host.host-prompt-only #view-question .answer-grid .answer-card {
 }
 .sting-overlay.timeout .sting-text { color: #ffd6dc; }
 .sting-overlay.all-answered .sting-text { color: #d8eedb; }
+
+/* ---- Final-question splash ----
+   Shown over the PROMPT phase of the very last question. Wedding-themed:
+   warm cream backdrop with a soft rose/gold tint, gold serif text, gentle
+   cinematic exit. Uses the shared .sting-overlay node with extra classes
+   so it doesn't disturb the existing "Time's up!" stinger.  */
+.sting-overlay.final-question {
+  background:
+    radial-gradient(ellipse at center, rgba(251, 247, 242, 0.96) 0%, rgba(232, 165, 181, 0.55) 60%, rgba(79, 107, 84, 0.55) 100%);
+  transition: opacity 0.7s cubic-bezier(.4, 0, .2, 1), backdrop-filter 0.7s ease, -webkit-backdrop-filter 0.7s ease;
+}
+.sting-overlay.final-question .sting-text {
+  font-family: var(--font-serif);
+  color: var(--green-deep);
+  text-shadow:
+    0 2px 24px rgba(201, 169, 110, 0.55),
+    0 4px 30px rgba(79, 107, 84, 0.18);
+  letter-spacing: 0.01em;
+  transition: transform 0.7s cubic-bezier(.4, 0, .2, 1), opacity 0.55s ease;
+}
+.sting-overlay.final-question:not(.visible) {
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
+}
+.sting-overlay.final-question:not(.visible) .sting-text {
+  transform: scale(1.18) translateY(-12px);
+  opacity: 0;
+}
+
+/* While the final-question splash is showing, hide the prompt content
+   underneath so it doesn't peek through. It fades in once the splash leaves. */
+body.host.host-final-intro #view-question .question-view {
+  opacity: 0;
+  transform: translateY(16px) scale(0.985);
+}
+body.host.host-final-intro-fading #view-question .question-view {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 1.1s ease, transform 1.1s cubic-bezier(.2, 1, .3, 1);
+  transition-delay: 0.25s;
+}

@@ -177,6 +177,48 @@ input[type="text"]:focus { border-color: var(--green-deep); }
 /* Legacy class no longer used; safe to remove. */
 .vines-bottom { display: none; }
 
+/* ----------------------------------------------------------------
+   Ambient rose-petal drift. Shared by the join page and the host
+   lobby. Sits in a fixed, pointer-events:none layer behind everything
+   (z-index: 0) so foreground UI just needs `position: relative; z-index: 1+`
+   to sit above it. Pure CSS animation — no JS.
+   ---------------------------------------------------------------- */
+.petal-layer {
+  position: fixed;
+  inset: 0;
+  /* Float above everything else (topbar, panels, modals) but stay
+     non-interactive so clicks pass straight through. */
+  z-index: 9999;
+  pointer-events: none;
+  overflow: hidden;
+}
+.petal {
+  position: absolute;
+  top: -40px;
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><radialGradient id='g' cx='40%25' cy='35%25' r='75%25'><stop offset='0%25' stop-color='%23F4C8D2'/><stop offset='55%25' stop-color='%23E8A5B5'/><stop offset='100%25' stop-color='%23C77088'/></radialGradient></defs><path d='M16 2 C 24 6, 30 14, 28 22 C 26 28, 20 31, 16 30 C 12 31, 6 28, 4 22 C 2 14, 8 6, 16 2 Z' fill='url(%23g)' opacity='0.9'/></svg>");
+  background-repeat: no-repeat;
+  background-size: contain;
+  will-change: transform, opacity;
+}
+@keyframes petalDrift {
+  0%   { transform: translate3d(0, -10vh, 0) rotate(0deg);     opacity: 0; }
+  10%  { opacity: 0.5; }
+  50%  { transform: translate3d(40px, 55vh, 0) rotate(180deg); opacity: 0.4; }
+  90%  { opacity: 0.3; }
+  100% { transform: translate3d(-20px, 115vh, 0) rotate(360deg); opacity: 0; }
+}
+.petal-1 { left: 14%; width: 18px; height: 18px; animation: petalDrift 30s linear infinite; animation-delay:  -3s; }
+.petal-2 { left: 38%; width: 22px; height: 22px; animation: petalDrift 38s linear infinite; animation-delay: -16s; }
+.petal-3 { left: 62%; width: 16px; height: 16px; animation: petalDrift 34s linear infinite; animation-delay:  -8s; }
+.petal-4 { left: 84%; width: 24px; height: 24px; animation: petalDrift 42s linear infinite; animation-delay: -24s; }
+.petal-5, .petal-6 { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .petal-layer { display: none; }
+}
+
 /* When the rose garland needs to live at the bottom of the page (e.g. the
    join page, where it would otherwise float in the middle), pin it just
    above the credit footer instead of leaving it in the document flow.

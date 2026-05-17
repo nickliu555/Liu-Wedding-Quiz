@@ -11,9 +11,22 @@
   <link rel="stylesheet" href="/css/player.css" />
 </head>
 <body class="player">
+  <!-- Ambient rose-petal drift, only visible while the player is waiting in
+       the lobby (gated by body.player-waiting in CSS). -->
+  <div class="petal-layer" aria-hidden="true">
+    <span class="petal petal-1"></span>
+    <span class="petal petal-2"></span>
+    <span class="petal petal-3"></span>
+    <span class="petal petal-4"></span>
+  </div>
+
   <div class="player-top">
     <div class="player-name" id="playerName">—</div>
-    <div class="player-score"><span id="playerScore">0</span> pts</div>
+    <div class="player-score-chip">
+      <span class="ring" aria-hidden="true"></span>
+      <span class="score-num" id="playerScore">0</span>
+      <span class="score-unit">pts</span>
+    </div>
   </div>
 
   <div class="player-view" id="playerView">

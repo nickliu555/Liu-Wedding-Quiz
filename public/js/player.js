@@ -25,12 +25,37 @@
     elView.innerHTML = '<div class="state-card">' + html + '</div>';
   }
 
+  // Centralized score writer. Comma-formats the number, and briefly
+  // pops the parent .player-score-chip whenever the score grows so
+  // the player feels the points land.
+  let lastDisplayedScore = 0;
+  function setScore(n) {
+    const next = Number(n) || 0;
+    elScore.textContent = next.toLocaleString();
+    if (next > lastDisplayedScore) {
+      const chip = elScore.closest('.player-score-chip');
+      if (chip) {
+        chip.classList.remove('bumped');
+        void chip.offsetWidth; // restart animation on consecutive bumps
+        chip.classList.add('bumped');
+      }
+    }
+    lastDisplayedScore = next;
+  }
+
   function renderLobbyWaiting() {
     render(
       '<h2 class="serif">You\'re in!</h2>' +
       '<p>Look up at the big screen. The quiz will start soon.</p>' +
       '<p style="margin-top:14px; color: var(--muted); font-size: 14px;">Keep this tab open.</p>'
     );
+    // Reveal the ambient petal drift only while the player is parked here.
+    document.body.classList.add('player-waiting');
+  }
+
+  // Drop the waiting-petals layer when transitioning away from the lobby.
+  function leaveLobbyWaiting() {
+    document.body.classList.remove('player-waiting');
   }
 
   // ---------------- Intro ("Get Ready" splash) ----------------
@@ -407,7 +432,7 @@
         return;
       }
       elName.textContent = res.player.name;
-      elScore.textContent = res.player.score || 0;
+      setScore(res.player.score || 0);
       reactionsMutedByHost = !!res.reactionsMuted;
       updateReactionButtonState();
       if (res.phase === 'LOBBY') { setReactionsAllowed(true); renderLobbyWaiting(); }
@@ -472,18 +497,21 @@
 
   socket.on('state:question', function (q) {
     if (rejected) return;
+    leaveLobbyWaiting();
     setReactionsAllowed(false);
     renderQuestion(q);
   });
 
   socket.on('state:intro', function (payload) {
     if (rejected) return;
+    leaveLobbyWaiting();
     setReactionsAllowed(false);
     renderIntro(payload);
   });
 
   socket.on('state:prompt', function (p) {
     if (rejected) return;
+    leaveLobbyWaiting();
     setReactionsAllowed(false);
     renderPrompt(p);
   });
@@ -507,13 +535,14 @@
       var res = pendingResult;
       pendingResult = null;
       lastResult = res;
-      elScore.textContent = res.totalScore;
+      setScore(res.totalScore);
       renderResult(res);
     }
   }
 
   socket.on('state:reveal', function (r) {
     if (rejected) return;
+    leaveLobbyWaiting();
     stopCountdown();
     // The countdown was just frozen mid-tick (often at "1s" because Math.ceil
     // rounds the final fractional second up). Snap it to "0s" so the player's
@@ -561,12 +590,13 @@
       return;
     }
     lastResult = res;
-    elScore.textContent = res.totalScore;
+    setScore(res.totalScore);
     renderResult(res);
   });
 
   socket.on('state:final', function () {
     if (rejected) return;
+    leaveLobbyWaiting();
     setReactionsAllowed(true);
     stopCountdown();
     renderFinal();

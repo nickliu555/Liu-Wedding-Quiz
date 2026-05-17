@@ -17,6 +17,18 @@ body.join, body.player {
 .join-header .brand { font-size: 32px; }
 .join-header p { color: var(--ink-soft); margin: 8px 0 0; }
 
+/* Petals on the player page only show while waiting in the lobby. */
+body.player .petal-layer { display: none; }
+body.player.player-waiting .petal-layer { display: block; }
+
+/* (Monogram / hairline / wedding-date styles intentionally removed; the
+   join page now uses the simpler brand + title header again.) */
+
+/* ---- Ambient petal drift ---------------------------------------------
+   Moved to base.css so both the join page and the host lobby share the
+   same animation. The join-page-specific stacking rule lives here. */
+.join-header, .join-form { position: relative; z-index: 2; }
+
 .join-form {
   margin-top: 40px;
   background: var(--surface);
@@ -52,6 +64,53 @@ body.join, body.player {
 }
 .player-name { font-weight: 600; }
 .player-score { color: var(--green-deep); font-weight: 700; }
+
+/* Sage pill with a tiny gold "wedding ring" beside the score number.
+   The ring is a CSS-only circle (gold border, cream center) sized to the
+   text. A .bumped class triggers a brief scale pop whenever the score
+   ticks up. */
+.player-score-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--green-deep);
+  color: white;
+  padding: 6px 14px 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(79, 107, 84, 0.25);
+  transition: transform 0.2s ease;
+}
+.player-score-chip .ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2.5px solid var(--gold);
+  box-shadow: 0 0 0 1px rgba(201, 169, 110, 0.35);
+  flex: 0 0 auto;
+}
+.player-score-chip .score-num {
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+}
+.player-score-chip .score-unit {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+}
+.player-score-chip.bumped { animation: scoreChipPop 0.6s cubic-bezier(.2, 1.5, .3, 1); }
+@keyframes scoreChipPop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.14); box-shadow: 0 6px 18px rgba(201, 169, 110, 0.55); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-score-chip.bumped { animation: none; }
+}
 
 .player-view { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 

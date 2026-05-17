@@ -22,6 +22,13 @@ const INTRO_DURATION_MS = 4000;
 // before we transition into the first question's PROMPT phase.
 const INTRO_GO_HOLD_MS = 1100;
 const PROMPT_DURATION_MS = 3000;
+// Extra time tacked onto the prompt phase before the very last question, so
+// the host page has room to show a "💍 Final Question!" splash before the
+// question itself becomes readable. Sized so the splash + fade-in leave
+// just a brief beat of prompt-only before the choices drop in (rather than
+// playing the full regular 3s prompt phase on top of the splash, which
+// reads as a dead second).
+const FINAL_PROMPT_EXTRA_MS = 3500;
 
 /**
  * Single-room quiz game state machine.
@@ -196,11 +203,13 @@ class Game {
     this.currentIndex = index;
     this.phase = PHASES.PROMPT;
     this.currentStartTs = Date.now();
-    this.currentEndsAt = this.currentStartTs + PROMPT_DURATION_MS;
+    const isLast = index === this.questions.length - 1;
+    const duration = PROMPT_DURATION_MS + (isLast ? FINAL_PROMPT_EXTRA_MS : 0);
+    this.currentEndsAt = this.currentStartTs + duration;
     this._phaseTimer = setTimeout(() => {
       this._phaseTimer = null;
       this._endPrompt();
-    }, PROMPT_DURATION_MS + 50);
+    }, duration + 50);
     return { ok: true, phase: PHASES.PROMPT };
   }
 
@@ -351,10 +360,13 @@ class Game {
       // When this prompt phase ends and the choices appear.
       endsAt: this.currentEndsAt,
       serverNow: Date.now(),
-      durationMs: PROMPT_DURATION_MS,
+      durationMs: PROMPT_DURATION_MS + (this.currentIndex === this.questions.length - 1 ? FINAL_PROMPT_EXTRA_MS : 0),
       // Surface the question's own time limit so the host/player can show
       // a "20s to answer" hint during the lead-in.
       timeLimitSec: q.timeLimitSec,
+      // Lets the host show a "💍 Final Question!" splash before the very
+      // last question's prompt content becomes readable.
+      isLastQuestion: this.currentIndex === this.questions.length - 1,
     };
   }
 

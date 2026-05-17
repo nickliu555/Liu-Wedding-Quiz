@@ -38,6 +38,17 @@
     <div class="host-main">
       <!-- Lobby -->
       <section class="view active" id="view-lobby">
+        <!-- Ambient rose-petal drift (lobby only). The .view container's
+             visibility:hidden cascade hides these on every other phase, so
+             the petals don't appear during questions/reveal/final. -->
+        <div class="petal-layer" aria-hidden="true">
+          <span class="petal petal-1"></span>
+          <span class="petal petal-2"></span>
+          <span class="petal petal-3"></span>
+          <span class="petal petal-4"></span>
+          <span class="petal petal-5"></span>
+          <span class="petal petal-6"></span>
+        </div>
         <div class="lobby-grid">
           <div class="qr-panel">
             <h2 class="serif">Scan to join</h2>
@@ -89,11 +100,11 @@
           <h2 class="question-prompt" id="rPrompt"></h2>
           <div class="reveal-grid" id="revealGrid">
             <div class="bars">
-              <h3 class="serif">Answers</h3>
+              <h3 class="serif section-title">answers</h3>
               <div id="barRows"></div>
             </div>
             <div class="leaderboard-panel" id="leaderboardPanel">
-              <h3 class="serif">Top 5</h3>
+              <h3 class="serif section-title">top five</h3>
               <div id="leaderboard"></div>
             </div>
           </div>
