@@ -1329,10 +1329,10 @@
 
   // ---------------- Floating reactions from players ----------------
   // Players tap an emoji on their phone -> server -> we spawn a floating
-  // emoji that drifts up the screen and fades out. Cap 30 concurrent so the
-  // host page never gets overwhelmed even with 150 active guests.
+  // emoji that drifts up the screen and fades out. Cap 10 concurrent so the
+  // host page stays uncluttered even with 100+ active guests.
   const REACTION_EMOJIS = ['😂', '🔥', '👀', '🎉', '😱', '👑'];
-  const REACTION_MAX_ON_SCREEN = 30;
+  const REACTION_MAX_ON_SCREEN = 10;
   const reactionLayer = document.getElementById('reactionLayer');
   function spawnReaction(index) {
     if (!reactionLayer) return;
