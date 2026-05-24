@@ -77,7 +77,7 @@ app.get('/qr', async (req, res) => {
     const svg = await QRCode.toString(url, {
       type: 'svg',
       margin: 1,
-      width: 320,
+      width: 640,
       color: { dark: '#1F2A24', light: '#FFFFFF' },
     });
     res.setHeader('Content-Type', 'image/svg+xml');

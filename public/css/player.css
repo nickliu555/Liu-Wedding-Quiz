@@ -1,8 +1,16 @@
 body.join, body.player {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   padding: 20px;
+  /* Respect iOS notch / home-indicator so content never slips underneath
+     them. Requires viewport-fit=cover in the page's viewport meta to
+     yield non-zero env() values. */
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(20px + env(safe-area-inset-left, 0px));
+  padding-right: calc(20px + env(safe-area-inset-right, 0px));
   max-width: 560px;
   margin: 0 auto;
   -webkit-user-select: none;
@@ -124,6 +132,52 @@ body.player.player-waiting .petal-layer { display: block; }
 .state-card h2 { margin: 0 0 8px; font-size: 26px; }
 .state-card p { color: var(--ink-soft); margin: 6px 0; }
 
+/* ---- Lobby-waiting heartbeat pulse ---------------------------------
+   A small heart with two concentric rings that "beat" outward, signalling
+   to the player that the app is alive and waiting for the host to start. */
+.waiting-pulse {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  margin: 18px auto 6px;
+}
+.waiting-pulse-heart {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pink-deep);
+  font-size: 28px;
+  line-height: 1;
+  animation: waitingHeartBeat 1.4s ease-in-out infinite;
+}
+.waiting-pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--pink-deep);
+  opacity: 0;
+  animation: waitingRingPulse 1.4s ease-out infinite;
+}
+.waiting-pulse-ring:nth-child(2) { animation-delay: 0.7s; }
+@keyframes waitingHeartBeat {
+  0%, 100% { transform: scale(1); }
+  18%      { transform: scale(1.22); }
+  36%      { transform: scale(1.0); }
+  54%      { transform: scale(1.14); }
+  72%      { transform: scale(1.0); }
+}
+@keyframes waitingRingPulse {
+  0%   { transform: scale(0.65); opacity: 0.55; }
+  80%  { transform: scale(1.7);  opacity: 0; }
+  100% { transform: scale(1.7);  opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .waiting-pulse-heart { animation: none; }
+  .waiting-pulse-ring  { animation: none; opacity: 0.35; transform: scale(1); }
+}
+
 /* Tile grid for 4 answer buttons */
 .tiles {
   display: grid;
@@ -205,7 +259,7 @@ html { touch-action: manipulation; }
 /* Reaction bar (lobby/reveal/final phases only) */
 .reaction-bar {
   position: sticky;
-  bottom: 44px;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
   margin-top: auto;
   margin-bottom: 8px;
   padding: 10px 8px 8px;
@@ -220,6 +274,11 @@ html { touch-action: manipulation; }
   gap: 4px;
   z-index: 5;
 }
+/* `display: flex` above overrides the user-agent `display: none` that
+   the [hidden] attribute relies on. Without this rule, the reaction
+   bar stays visible during active questions and overlaps the answer
+   tiles even though player.js sets reactionBar.hidden = true. */
+.reaction-bar[hidden] { display: none; }
 .reaction-btn {
   appearance: none;
   -webkit-appearance: none;
@@ -231,6 +290,17 @@ html { touch-action: manipulation; }
   cursor: pointer;
   border-radius: 999px;
   transition: transform 0.08s ease, opacity 0.2s ease;
+  /* Mobile fix: kill the iOS/Android grey-circle tap highlight, and
+     drop the lingering focus ring left behind after a tap (a circle
+     stuck on the previously-tapped emoji). Keyboard focus is still
+     visible via :focus-visible below for accessibility. */
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+.reaction-btn:focus { outline: none; }
+.reaction-btn:focus-visible {
+  outline: 2px solid var(--pink-deep);
+  outline-offset: 2px;
 }
 .reaction-btn:not(:disabled):active { transform: scale(1.25); }
 .reaction-btn:disabled {
@@ -281,4 +351,40 @@ html { touch-action: manipulation; }
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+/* ─── Mobile-first tightening (player screens are ~always on a phone) ───
+   Mirrors the proven Trivia-app breakpoints. Without these, the state-
+   card + tiles + reaction bar are taller than the visible viewport on
+   common phones (especially with the iOS address bar showing), which
+   was making the page scrollable and shoving the centered card into
+   the bottom half of the screen. Shrinking the chrome here lets the
+   whole layout fit naturally without scrolling on essentially every
+   modern phone in portrait. */
+@media (max-width: 600px) {
+  body.join, body.player {
+    padding: 14px 12px;
+    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
+    padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+  .state-card { padding: 22px 18px; }
+  .reaction-bar {
+    padding: 12px 10px 10px;
+    bottom: calc(30px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* iPhone SE / very small phones */
+@media (max-width: 380px) {
+  body.join, body.player { padding-left: 10px; padding-right: 10px; }
+  .state-card { padding: 18px 14px; }
+  .reaction-btn { font-size: 26px; padding: 10px 0; }
+}
+
+/* Short screens (landscape phones, foldables half-opened) */
+@media (max-height: 600px) {
+  .state-card { padding: 16px 18px; }
+  .reaction-bar { padding: 8px 8px 6px; }
 }

@@ -34,6 +34,10 @@ html, body {
   color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* Prevent iOS rubber-band scrolling so the player page (which is
+     deliberately sized to fit the viewport) doesn't feel scrollable
+     even if a stray pixel of overflow exists. */
+  overscroll-behavior-y: contain;
 }
 
 h1, h2, h3, .serif { font-family: var(--font-serif); font-weight: 600; }
@@ -50,7 +54,14 @@ button {
   font-weight: 600;
   transition: transform 0.08s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow); }
+/* Only apply hover lift on true pointer devices. On touch screens iOS
+   Safari leaves :hover stuck on a tapped button until the user taps
+   somewhere else — which appears as a lingering drop-shadow "circle"
+   around the previously tapped button (very visible on round buttons
+   like the reaction emojis). */
+@media (hover: hover) and (pointer: fine) {
+  button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow); }
+}
 button:active:not(:disabled) { transform: translateY(0); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -81,6 +92,9 @@ input[type="text"]:focus { border-color: var(--green-deep); }
   letter-spacing: 0.02em;
 }
 .brand .amp { color: var(--pink-deep); margin: 0 6px; }
+/* Reusable: any `&` symbol marked with .amp picks up the same pink
+   accent (lobby title, etc.), not just the topbar `.brand`. */
+.amp { color: var(--pink-deep); }
 
 /* Tile color helpers (shared between player + host) */
 .tile-color-0 { background: var(--tile-1); }

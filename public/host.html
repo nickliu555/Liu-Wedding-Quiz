@@ -20,12 +20,12 @@
                   aria-controls="settingsPanel" aria-expanded="false"
                   title="Settings">⚙️ Settings</button>
           <div class="settings-panel" id="settingsPanel" hidden>
+            <button id="fullscreenBtn" class="btn-ghost" type="button"
+                    title="Toggle fullscreen">⛶ Fullscreen</button>
             <button id="musicBtn" class="btn-ghost" type="button"
                     data-settings-keep-open title="Toggle lobby music">♪ Music</button>
             <button id="muteReactionsBtn" class="btn-ghost" type="button"
                     data-settings-keep-open title="Mute player reactions">🔔 Reactions</button>
-            <button id="fullscreenBtn" class="btn-ghost" type="button"
-                    title="Toggle fullscreen">⛶ Fullscreen</button>
           </div>
         </div>
         <button id="resetBtn" class="btn-ghost" title="Reset the whole game">Reset</button>
@@ -52,14 +52,14 @@
         <div class="lobby-grid">
           <div class="qr-panel">
             <h2 class="serif">Scan to join</h2>
-            <p>Point your phone camera at the code</p>
-            <img id="qrImg" alt="Join QR code" width="320" height="320" style="background:white; padding:12px; border-radius:14px; display:block; margin:0 auto;" />
+            <p>Or type the URL below on your phone</p>
+            <img id="qrImg" alt="Join QR code" width="640" height="640" style="background:white; padding:12px; border-radius:14px; display:block; margin:0 auto; max-width:100%; height:auto;" />
             <div class="join-url" id="joinUrl"></div>
           </div>
           <div class="players-panel">
             <div class="header">
-              <h3 class="serif">Players</h3>
-              <div class="count" id="playerCount">0</div>
+              <h3 class="serif">Carly <span class="amp">&amp;</span> Nick &middot; Wedding Quiz</h3>
+              <div class="count" id="playerCount">0 players</div>
             </div>
             <div class="player-list" id="playerList"></div>
             <div class="lobby-actions">
@@ -140,8 +140,6 @@
   <div class="sting-overlay" id="stingOverlay" aria-hidden="true">
     <div class="sting-text" id="stingText"></div>
   </div>
-
-  <footer class="credit-footer">Developed by Nick Liu (with help from Claude)</footer>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/host.js"></script>

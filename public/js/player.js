@@ -47,6 +47,11 @@
     render(
       '<h2 class="serif">You\'re in!</h2>' +
       '<p>Look up at the big screen. The quiz will start soon.</p>' +
+      '<div class="waiting-pulse" aria-hidden="true">' +
+        '<span class="waiting-pulse-ring"></span>' +
+        '<span class="waiting-pulse-ring"></span>' +
+        '<span class="waiting-pulse-heart">♥</span>' +
+      '</div>' +
       '<p style="margin-top:14px; color: var(--muted); font-size: 14px;">Keep this tab open.</p>'
     );
     // Reveal the ambient petal drift only while the player is parked here.
@@ -189,6 +194,8 @@
 
   function renderRejected(reason) {
     setReactionsAllowed(false);
+    // Player is no longer in the game — hide the bar entirely.
+    if (reactionBar) reactionBar.hidden = true;
     const msg = {
       'kicked': 'You were removed by the host.',
       'lobby-closed': 'The quiz has already started.',
@@ -358,10 +365,16 @@
     startReactionCountdown();
   }
 
+  // Note: setReactionsAllowed only toggles the *enabled* state of the
+  // buttons. The bar itself stays visible across all in-game phases so
+  // the layout doesn't shift between question / lobby / reveal / final.
+  // During phases where reactions aren't allowed (INTRO / PROMPT /
+  // QUESTION) the buttons are simply disabled (grayed out by the
+  // .reaction-btn:disabled rule). The bar is only truly hidden before
+  // the player has joined and after they've been rejected — both done
+  // explicitly via reactionBar.hidden = true/false at those points.
   function setReactionsAllowed(allowed) {
     reactionsAllowed = allowed;
-    if (!reactionBar) return;
-    reactionBar.hidden = !allowed;
     updateReactionButtonState();
   }
   function updateReactionButtonState() {
@@ -395,6 +408,11 @@
     reactionBar.addEventListener('click', function (e) {
       const btn = e.target.closest('.reaction-btn');
       if (!btn || btn.disabled) return;
+      // Drop focus immediately so mobile browsers don't leave a focus
+      // ring / highlight ring around the tapped emoji button (which
+      // appears as a lingering circle when the user taps a different
+      // emoji next).
+      try { btn.blur(); } catch (_) {}
       const idx = parseInt(btn.dataset.reaction, 10);
       if (isNaN(idx)) return;
       // Optimistically start cooldown; if the server rejects with a longer
@@ -434,6 +452,10 @@
       elName.textContent = res.player.name;
       setScore(res.player.score || 0);
       reactionsMutedByHost = !!res.reactionsMuted;
+      // Player is confirmed — reveal the reaction bar. It will remain
+      // visible for the rest of the session (disabled vs enabled depends
+      // on the current phase via setReactionsAllowed).
+      if (reactionBar) reactionBar.hidden = false;
       updateReactionButtonState();
       if (res.phase === 'LOBBY') { setReactionsAllowed(true); renderLobbyWaiting(); }
       else if (res.phase === 'INTRO') {

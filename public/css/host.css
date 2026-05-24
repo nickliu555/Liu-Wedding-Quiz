@@ -71,9 +71,21 @@ body.host {
      mirroring to a TV). */
   display: grid;
   grid-template-areas: 'stack';
+  /* Explicit 1fr row so the centered panel respects this element's
+     asymmetric padding. Without this the row sizes to the tallest
+     of the (stacked) views — including INACTIVE ones — which can be
+     bigger than the padding box and breaks the asymmetric centering. */
+  grid-template-rows: minmax(0, 1fr);
   align-items: center;
   justify-items: center;
-  padding: 28px;
+  /* Asymmetric padding to visually center content in the viewport rather
+     than in the main area. The topbar + vines garland take ~137px above
+     main with nothing equivalent below; without extra bottom padding the
+     centered panel sits ~70px below true viewport center, which reads
+     as "dragged down" on shorter (non-fullscreen) windows. The extra
+     ~80px on the bottom pulls the centered content back toward visual
+     center on every viewport size. */
+  padding: 28px 28px 80px 28px;
   overflow: hidden;
   position: relative;
 }
@@ -158,23 +170,50 @@ body.host {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  gap: 40px;
-  align-items: center;
+  /* Use minmax(0, 1fr) so each column truly splits available width 50/50.
+     Plain `1fr` has an implicit `auto` minimum, which lets the QR image's
+     intrinsic 480px width push the QR track wider than the Players track. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: stretch;
 }
+/* Panel sizing strategy:
+   - `height: 72vh` is the comfortable size that looks right in fullscreen.
+   - `max-height: calc(100vh - 245px)` caps the height to whatever the
+     main area can actually fit (topbar+vines ~137px + main padding
+     28px top + 80px bottom = 245px reserved). On shorter (non-fullscreen)
+     windows where 72vh would push the panel past the viewport, this cap
+     kicks in and the panel shrinks just enough to fit. Fullscreen stays
+     visually identical to the original design. */
 .qr-panel {
   background: var(--surface);
   border-radius: var(--radius);
-  padding: 28px;
+  padding: 20px;
   box-shadow: var(--shadow);
   text-align: center;
+  height: 72vh;
+  max-height: calc(100vh - 245px);
+  min-height: 0;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
 }
-.qr-panel h2 { margin: 0 0 8px; font-size: 44px; }
-.qr-panel p  { color: var(--ink-soft); margin: 4px 0 16px; font-size: 20px; }
+.qr-panel h2 { margin: 0 0 2px; font-size: 38px; }
+.qr-panel p  { color: var(--ink-soft); margin: 0 0 12px; font-size: 18px; }
 .qr-panel .join-url {
   font-family: var(--font-sans);
   font-size: 22px; font-weight: 700; color: var(--green-deep);
   word-break: break-all;
+}
+/* Let the QR shrink to fit the panel's remaining vertical space on shorter
+   (non-fullscreen) windows. Without `min-height: 0` + `max-height: 100%`,
+   the image keeps its intrinsic 480px height and pushes the panel beyond
+   the viewport. `flex: 0 1 auto` allows shrink-only. */
+.qr-panel #qrImg {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
 }
 #qrCanvas { background: white; padding: 12px; border-radius: var(--radius); display: block; margin: 0 auto; }
 
@@ -184,15 +223,36 @@ body.host {
   padding: 28px;
   box-shadow: var(--shadow);
   height: 72vh;
+  max-height: calc(100vh - 245px);
+  min-height: 0;
   display: flex; flex-direction: column;
 }
 .players-panel .header {
-  display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 22px;
 }
-.players-panel h3 { margin: 0; font-size: 28px; }
+.players-panel h3 {
+  margin: 0;
+  /* Was a flat 28px when the title was just "Players". Now that it reads
+     "Carly & Nick · Wedding Quiz", scale it up on wider hosts (TV / full
+     screen) but shrink on smaller windows so it doesn't overflow the
+     pill on the right. */
+  font-size: clamp(26px, 2.4vw, 38px);
+  line-height: 1.15;
+  /* Match the topbar `.brand` palette — deep green title with the
+     `.amp` span (from base.css) giving the `&` a pink accent. */
+  color: var(--green-deep);
+  letter-spacing: 0.02em;
+  /* Allow the title to take the lion's share of the row and the count
+     pill to keep its natural width. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .players-panel .count {
-  background: var(--green-deep); color: white; padding: 4px 12px; border-radius: 999px;
+  background: var(--green-deep); color: white; padding: 4px 14px; border-radius: 999px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: 0 0 auto;
   transition: transform 0.2s ease;
 }
 /* Heart-pulse when a new guest joins. */
@@ -206,7 +266,8 @@ body.host {
 }
 
 .player-list {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -219,6 +280,11 @@ body.host {
 .player-chip {
   position: relative;
   display: flex; align-items: center; gap: 10px;
+  /* Explicit min-height so the chip claims its natural size even inside a
+     constrained scroll grid. (`overflow: hidden` below makes the grid treat
+     `min-height: auto` as 0, which lets row tracks collapse to ~text height
+     when the list is full — squishing chips visually.) */
+  min-height: 50px;
   background: var(--surface);
   border: 1.5px solid #ece6dd;
   padding: 8px 12px 8px 8px; border-radius: 999px;
@@ -370,7 +436,8 @@ body.host {
 /* ---- Reveal ---- */
 .reveal-view > .question-meta,
 .reveal-view > .question-prompt { text-align: center; }
-.reveal-view .question-prompt { font-size: clamp(28px, 3.6vw, 44px); margin-bottom: 16px; }
+.reveal-view .question-meta { margin-bottom: 14px; }
+.reveal-view .question-prompt { font-size: clamp(28px, 3.6vw, 44px); margin-bottom: 40px; }
 .reveal-grid {
   display: grid; grid-template-columns: 1.2fr 1fr; gap: 30px;
   max-width: 1300px; margin: 0 auto;
@@ -414,7 +481,10 @@ body.host {
 }
 .bar-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1.4fr) minmax(0, 2fr) 56px 36px;
+  /* Count column uses minmax so 3-digit totals (up to ~150 guests) always
+     fit without crowding the green check that sits in its own 36px track
+     to the right. */
+  grid-template-columns: 44px minmax(0, 1.4fr) minmax(0, 2fr) minmax(64px, max-content) 36px;
   align-items: center;
   gap: 10px; margin: 10px 0;
   padding: 4px 6px;
@@ -433,7 +503,19 @@ body.host {
 .bar-row .bar-fill {
   height: 100%; border-radius: 8px; transition: width 0.6s cubic-bezier(.2,.9,.25,1);
 }
-.bar-row .count { text-align: right; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.bar-row .count {
+  text-align: right;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  /* Never let the number wrap onto two lines, and give it a hair of
+     right padding so even at very large player counts it doesn't kiss
+     the check column. */
+  white-space: nowrap;
+  padding-right: 4px;
+  min-width: 0;
+}
 .bar-row.correct {
   background: linear-gradient(90deg, rgba(79, 107, 84, 0.20) 0%, rgba(79, 107, 84, 0.08) 100%);
   box-shadow: inset 0 0 0 3px var(--green-deep), 0 4px 18px rgba(79, 107, 84, 0.18);
@@ -483,10 +565,53 @@ body.host {
 .lb-row .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-row .score { font-weight: 700; color: var(--green-deep); font-variant-numeric: tabular-nums; }
 
-.reveal-actions { text-align: center; margin-top: 24px; }
+.reveal-actions { text-align: center; margin-top: 48px; }
 
 /* ---- Final / Podium ---- */
-.final-view { text-align: center; }
+/* The final view must fit inside its grid cell (.host-main row).
+   Without this, with 100+ players the full scoreboard makes the
+   centered .view taller than the cell — and since .host-main centers
+   it vertically, the overflow is split: "Congratulations" disappears
+   above the topbar and "Full scores" bleeds below the bottom edge.
+
+   Two things must be true for the flex-fit below to work:
+   1. #view-final must FILL the grid cell (not shrink to content).
+      .host-main applies align-items/justify-items: center to every
+      .view, which makes them auto-sized. We override that here with
+      align-self/justify-self: stretch + height: 100%.
+   2. .final-view's `height: 100%` then resolves against a definite
+      parent height — only then can .full-lb's `flex: 1` actually
+      shrink the box (with internal scroll) instead of growing to the
+      natural size of the 100+ row list. */
+#view-final {
+  align-self: stretch;
+  justify-self: stretch;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+/* On the final view specifically, give back most of the asymmetric
+   bottom padding that .host-main reserves for visual vertical
+   centering — the Full Scores box (flex: 1) absorbs that space so
+   the scoreboard reads as a real anchored panel instead of a tiny
+   strip floating mid-screen. We keep a 32px gutter so it doesn't
+   feel like it's bleeding off the edge. */
+body.host:has(#view-final.active) .host-main {
+  padding-bottom: 32px;
+}
+.final-view {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: 100%;
+  min-height: 0;
+}
+.final-view > h2,
+.final-view > .results-intro,
+.final-view > .podium { flex: 0 0 auto; }
+.final-view > .full-lb { flex: 1 1 auto; min-height: 0; }
 .final-view h2 {
   font-family: var(--font-serif); font-size: clamp(40px, 5vw, 72px); margin: 0 0 30px;
   color: var(--green-deep);
@@ -502,7 +627,13 @@ body.host {
 }
 .podium {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;
-  align-items: end; max-width: 900px; margin: 0 auto 30px;
+  /* `width: 100%` ensures the grid fills .final-view (a flex column with
+     align-items: stretch) up to its max-width — without it, some browsers
+     leave the grid at its intrinsic content width and the cards look
+     skinny. `max-width: 1100px` gives the podium real visual weight
+     against the now-full-height .full-lb sitting below it. */
+  width: 100%;
+  align-items: end; max-width: 1100px; margin: 0 auto 56px;
 }
 
 /* "Now for the results..." intro shown for ~2 seconds before the podium
@@ -526,6 +657,10 @@ body.host {
 .final-view.pre-reveal .podium,
 .final-view.pre-reveal .full-lb { display: none; }
 .final-view.pre-reveal h2 { display: none; }
+/* Once the intro fades out, fully remove it from flex flow — otherwise
+   its ~130px height (clamp(36,5vw,64)px + margins) is still reserved
+   above the podium, pushing the whole final view down. */
+.final-view:not(.pre-reveal) .results-intro { display: none; }
 .podium-step {
   background: var(--surface); border-radius: var(--radius); padding: 24px 16px;
   box-shadow: var(--shadow-strong);
@@ -593,9 +728,14 @@ body.host {
 .podium-step.revealed.place-3 { box-shadow: 0 0 0 3px var(--pink-soft, #f0c5d0), var(--shadow-strong); }
 
 .full-lb {
+  width: 100%;
   max-width: 700px; margin: 0 auto; background: var(--surface); border-radius: var(--radius);
   padding: 20px; box-shadow: var(--shadow); text-align: left;
-  max-height: 45vh; overflow-y: auto;
+  /* Flex sizing handles height — fills whatever vertical space remains
+     after h2 + podium, scrolls internally for 100+ player lists. NO
+     min-height here: a min-height would prevent flex from shrinking
+     the box on short host windows and cause overflow again. */
+  overflow-y: auto;
   /* Hidden until the winner has been revealed so the rest of the
      standings don't spoil the podium reveal. */
   opacity: 0;

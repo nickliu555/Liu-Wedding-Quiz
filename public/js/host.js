@@ -353,7 +353,7 @@
       playerCount.classList.add('bumped');
     }
     lastPlayerCount = players.length;
-    playerCount.textContent = players.length;
+    playerCount.textContent = players.length + (players.length === 1 ? ' player' : ' players');
 
     playerList.innerHTML = players.map(function (p) {
       const isNew = !lobbyFirstRender && !knownPids.has(p.id);
