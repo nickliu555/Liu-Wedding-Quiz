@@ -584,8 +584,18 @@ body.host {
       shrink the box (with internal scroll) instead of growing to the
       natural size of the 100+ row list. */
 #view-final {
+  /* `align-self: stretch` makes #view-final fill the grid row's height so
+     `height: 100%` below resolves to a definite value (required for the
+     full-leaderboard flex-shrink trick). We deliberately do NOT set
+     `justify-self: stretch` here: combined with the inherited
+     `max-width: 1400px` from `.view`, the CSS spec falls back to
+     `justify-self: start`, which pins the whole final view to the left
+     edge of the grid cell on any viewport wider than 1400px (e.g. a
+     2560px desktop monitor). On a ~1440px MacBook the cell happens to be
+     the same width as the cap so there's no leftover space and the bug
+     is invisible. Letting it inherit `justify-self: center` from
+     .host-main's `justify-items: center` centers it on every screen. */
   align-self: stretch;
-  justify-self: stretch;
   height: 100%;
   width: 100%;
   overflow: hidden;
