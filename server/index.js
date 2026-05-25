@@ -160,7 +160,11 @@ function broadcastReveal() {
 }
 
 function broadcastFinal() {
-  const lb = game.getLeaderboard();
+  // Use the tier-annotated leaderboard so each row carries
+  // `podiumTier` ∈ {1,2,3,null}. Player phones key off that (not raw
+  // rank) to pick the medal copy — keeps host podium and phones
+  // aligned when ties push the bronze tier down below rank 3.
+  const lb = game.getLeaderboardWithPodiumTier();
   io.emit('state:final', {
     // `podium` (top 3 rows) kept for back-compat. The host now drives
     // the podium reveal off `podiumGroups`, which buckets players by
@@ -256,7 +260,9 @@ io.on('connection', (socket) => {
       // still mid-podium-reveal) or the rank-reveal card (if the host
       // already signaled `host:podiumDone`). `podiumRevealed` is the
       // gate; player code chooses which to render based on that flag.
-      const lb = game.getLeaderboard();
+      // Tier-annotated rows let the phone show the correct medal even
+      // when the silver/bronze tier is at a non-2/3 rank.
+      const lb = game.getLeaderboardWithPodiumTier();
       payload.final = {
         fullLeaderboard: lb,
         podiumRevealed: game.podiumRevealed,
@@ -366,7 +372,7 @@ io.on('connection', (socket) => {
         });
       }
     } else if (game.phase === PHASES.FINAL) {
-      const lb = game.getLeaderboard();
+      const lb = game.getLeaderboardWithPodiumTier();
       socket.emit('state:final', {
         podium: lb.slice(0, 3),
         podiumGroups: game.getPodiumGroups(),

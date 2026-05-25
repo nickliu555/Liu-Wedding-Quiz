@@ -251,6 +251,87 @@ function buildGame(pairs) {
   assertEq(g.lastEndReason, 'host', 'lastEndReason: tagged as host');
 }
 
+// --- getLeaderboardWithPodiumTier ---
+// Annotates each leaderboard row with podiumTier ∈ {1,2,3,null} based
+// on the top-3-DISTINCT-ranks rule (mirroring getPodiumGroups). The
+// player phone keys off `podiumTier` (not raw rank) when picking the
+// medal, so this annotation is what keeps host podium and phones in
+// agreement when ties shift silver/bronze to non-2/3 ranks.
+
+// Vanilla case: 3 distinct scores -> tiers [1,2,3].
+{
+  const g = buildGame([['Avery', 100], ['Bea', 50], ['Casey', 25]]);
+  const lb = g.getLeaderboardWithPodiumTier();
+  assertEq(
+    lb.map((r) => [r.name, r.rank, r.podiumTier]),
+    [['Avery', 1, 1], ['Bea', 2, 2], ['Casey', 3, 3]],
+    'getLeaderboardWithPodiumTier: vanilla 3 distinct ranks -> tiers 1/2/3'
+  );
+}
+
+// User's reported scenario: 9 players with ranks [1,1,3,3,3,6,6,6,6]
+// should map to tiers [1,1,2,2,2,3,3,3,3] so rank-6 players still get
+// bronze on their phones (matching the host podium's bronze slot).
+{
+  const g = buildGame([
+    ['Pia',  998], ['Remy', 998],
+    ['Gigi', 996], ['Hana', 996], ['Niko', 996],
+    ['Mira', 995], ['Omar', 995], ['Sage', 995], ['Vik', 995],
+  ]);
+  const lb = g.getLeaderboardWithPodiumTier();
+  assertEq(
+    lb.map((r) => [r.name, r.rank, r.podiumTier]),
+    [
+      ['Pia',  1, 1], ['Remy', 1, 1],
+      ['Gigi', 3, 2], ['Hana', 3, 2], ['Niko', 3, 2],
+      ['Mira', 6, 3], ['Omar', 6, 3], ['Sage', 6, 3], ['Vik',  6, 3],
+    ],
+    'getLeaderboardWithPodiumTier: 9-player [1,1,3,3,3,6,6,6,6] -> tiers [1,1,2,2,2,3,3,3,3]'
+  );
+}
+
+// All-tied: only one distinct rank exists, every row gets tier 1.
+// No silver or bronze tier should appear anywhere.
+{
+  const g = buildGame([['Avery', 100], ['Bea', 100], ['Casey', 100], ['Dev', 100]]);
+  const lb = g.getLeaderboardWithPodiumTier();
+  assertEq(
+    lb.map((r) => r.podiumTier),
+    [1, 1, 1, 1],
+    'getLeaderboardWithPodiumTier: all tied for 1st -> every row tier 1'
+  );
+}
+
+// Two distinct ranks ([1,1,3]): tiers [1,1,2], no bronze.
+{
+  const g = buildGame([['Avery', 100], ['Bea', 100], ['Casey', 50]]);
+  const lb = g.getLeaderboardWithPodiumTier();
+  assertEq(
+    lb.map((r) => r.podiumTier),
+    [1, 1, 2],
+    'getLeaderboardWithPodiumTier: top tie + lone third -> tiers [1,1,2]'
+  );
+}
+
+// Beyond top-3 distinct ranks: those rows get podiumTier: null.
+{
+  const g = buildGame([
+    ['Avery', 100], ['Bea', 80], ['Casey', 60], ['Dev', 40], ['Eli', 20],
+  ]);
+  const lb = g.getLeaderboardWithPodiumTier();
+  assertEq(
+    lb.map((r) => [r.name, r.podiumTier]),
+    [['Avery', 1], ['Bea', 2], ['Casey', 3], ['Dev', null], ['Eli', null]],
+    'getLeaderboardWithPodiumTier: rows past tier 3 get null'
+  );
+}
+
+// Empty game returns [].
+{
+  const g = buildGame([]);
+  assertEq(g.getLeaderboardWithPodiumTier(), [], 'getLeaderboardWithPodiumTier: empty game -> []');
+}
+
 // --- getPlayerResult rank ---
 // Regression: pre-fix the function used `lb.findIndex(...) + 1` as the
 // reported rank, which is alphabetical position when scores tie. With

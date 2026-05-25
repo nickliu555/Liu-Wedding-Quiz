@@ -471,6 +471,42 @@ class Game {
     return groups;
   }
 
+  // Same rows as getLeaderboard(), with each row annotated with
+  // `podiumTier` ∈ {1, 2, 3, null}. Tier is assigned by the SAME
+  // top-3-distinct-ranks rule used by getPodiumGroups(), so the host
+  // podium and the player phones agree on who gets gold/silver/bronze.
+  //
+  // Important: tier is NOT raw rank. If ranks are [1,1,3,3,3,6,6,6,6],
+  // the distinct ranks are [1,3,6] -> tiers [1,2,3]. So players at
+  // rank 6 get tier 3 (bronze), NOT null. Rows beyond the top 3
+  // distinct ranks get `podiumTier: null`.
+  //
+  // Edge cases:
+  //   - All players tied for 1st: only one distinct rank exists, so
+  //     every row gets tier 1 and no silver/bronze ever appears.
+  //   - Two distinct ranks (e.g. [1,1,3]): tiers [1,1,2], no bronze.
+  //   - Empty game: returns [].
+  getLeaderboardWithPodiumTier() {
+    const full = this.getLeaderboard();
+    if (full.length === 0) return [];
+    // Walk the rows in rank order, collect the first 3 distinct ranks.
+    const distinctRanks = [];
+    for (const row of full) {
+      if (distinctRanks[distinctRanks.length - 1] !== row.rank) {
+        distinctRanks.push(row.rank);
+        if (distinctRanks.length === 3) break;
+      }
+    }
+    const rankToTier = new Map();
+    for (let i = 0; i < distinctRanks.length; i++) {
+      rankToTier.set(distinctRanks[i], i + 1);
+    }
+    return full.map((row) => ({
+      ...row,
+      podiumTier: rankToTier.has(row.rank) ? rankToTier.get(row.rank) : null,
+    }));
+  }
+
   getLobbyPlayers() {
     return Array.from(this.players.values()).map((p) => ({
       id: p.id,

@@ -283,9 +283,13 @@ body.player.urgent .urgent-bar {
   font-size: 15px;
 }
 .rank-reveal-card .rank-footnote {
-  margin-top: 14px;
-  font-size: 14px;
-  color: var(--ink-soft);
+  /* Closing sentiment — tinted with the wedding-palette pink so it
+     reads as a warm sign-off, set apart from the neutral-ink rank/
+     total lines above purely by color + italic (no divider needed). */
+  margin-top: 18px;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--pink-deep);
 }
 @keyframes rankRevealIn {
   from { opacity: 0; transform: scale(0.92) translateY(8px); }

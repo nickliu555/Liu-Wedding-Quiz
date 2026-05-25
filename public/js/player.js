@@ -246,34 +246,56 @@
     // so this count is reliable.
     const tieCount = lb.filter(function (e) { return e.rank === rank; }).length;
     const tied = tieCount > 1;
+    // Medal is driven by PODIUM TIER (1/2/3/null), not raw rank, so we
+    // stay in lock-step with the host podium when ties push the silver
+    // or bronze tier down to non-2/3 ranks. e.g. ranks [1,1,3,3,3,6...]
+    // → tiers [1,1,2,2,2,3...] so the rank-6 players still get bronze
+    // here just like they do on the big screen.
+    //
+    // Copy contract (per user spec):
+    //   - Medal headline NEVER names a specific rank (silver ≠ rank 2
+    //     in general; bronze ≠ rank 3).
+    //   - Actual rank ALWAYS appears on its own line under any medal,
+    //     for consistency across gold/silver/bronze (the user explicitly
+    //     wants the rank shown even when you win).
+    //   - "(N winners)" flavor is preserved for gold-tier ties; other
+    //     tiers say "(N players)".
+    const tier = me.podiumTier || null;
 
-    // Compose the headline copy. Top-3 get medal emojis + place labels;
-    // everyone else gets a "#X of Y" line. Tied players see "(N players)"
-    // (or "(N winners)" for tied first) right under the headline.
     let medal = '';
     let headline = '';
-    let needsOfTotal = false; // append "out of N players" below headline
-    if (rank === 1) {
+    let rankLine = '';   // separate line showing the actual rank (under any medal)
+    // "out of N players" is shown under EVERY case so players always
+    // know the size of the field they competed in. (Previously this
+    // line was only shown for non-medal finishes, which was an
+    // inconsistency.)
+    if (tier === 1) {
       medal = '🥇';
       headline = tied ? 'Tied for the win!' : 'You won!';
-    } else if (rank === 2) {
+      rankLine = tied
+        ? '<p class="rank-tied-count">Tied at #' + rank + ' (' + tieCount + ' winners)</p>'
+        : '<p class="rank-tied-count">You finished at #' + rank + '</p>';
+    } else if (tier === 2) {
       medal = '🥈';
-      headline = tied ? 'Tied for 2nd Place' : '2nd Place';
-    } else if (rank === 3) {
+      headline = 'Silver medal!';
+      rankLine = tied
+        ? '<p class="rank-tied-count">Tied at #' + rank + ' (' + tieCount + ' players)</p>'
+        : '<p class="rank-tied-count">You finished at #' + rank + '</p>';
+    } else if (tier === 3) {
       medal = '🥉';
-      headline = tied ? 'Tied for 3rd Place' : '3rd Place';
+      headline = 'Bronze medal!';
+      rankLine = tied
+        ? '<p class="rank-tied-count">Tied at #' + rank + ' (' + tieCount + ' players)</p>'
+        : '<p class="rank-tied-count">You finished at #' + rank + '</p>';
     } else {
+      // Off the podium — no medal. Rank is already in the headline so
+      // we skip the separate rank line; the tie size goes below.
       headline = tied ? ('Tied at #' + rank) : ('#' + rank);
-      needsOfTotal = true;
+      if (tied) {
+        rankLine = '<p class="rank-tied-count">(' + tieCount + ' players)</p>';
+      }
     }
-    const tieLine = tied
-      ? '<p class="rank-tied-count">' +
-          '(' + tieCount + (rank === 1 ? ' winners' : ' players') + ')' +
-        '</p>'
-      : '';
-    const totalLine = needsOfTotal
-      ? '<p class="rank-total">out of ' + totalPlayers + ' players</p>'
-      : '';
+    const totalLine = '<p class="rank-total">out of ' + totalPlayers + ' players</p>';
     // Score is already shown in the sticky top bar chip; no need to
     // repeat it here.
 
@@ -281,7 +303,7 @@
       '<div class="state-card rank-reveal-card">' +
         (medal ? '<div class="rank-medal" aria-hidden="true">' + medal + '</div>' : '') +
         '<h2 class="serif rank-headline">' + headline + '</h2>' +
-        tieLine +
+        rankLine +
         totalLine +
         '<p class="rank-footnote">Thanks for playing! 💕</p>' +
       '</div>';
