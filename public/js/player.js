@@ -289,11 +289,12 @@
         : '<p class="rank-tied-count">You finished at #' + rank + '</p>';
     } else {
       // Off the podium — no medal. Rank is already in the headline so
-      // we skip the separate rank line; the tie size goes below.
+      // we skip the separate rank line. We intentionally do NOT show
+      // the tie size here: at e.g. #14 the "(N players)" count adds
+      // clutter without celebration value. The count is still shown
+      // on podium tiers above where it reads as bragging rights
+      // ("3 winners" / "2 players tied for silver").
       headline = tied ? ('Tied at #' + rank) : ('#' + rank);
-      if (tied) {
-        rankLine = '<p class="rank-tied-count">(' + tieCount + ' players)</p>';
-      }
     }
     const totalLine = '<p class="rank-total">out of ' + totalPlayers + ' players</p>';
     // Score is already shown in the sticky top bar chip; no need to
