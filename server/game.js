@@ -50,6 +50,12 @@ class Game {
     this.onQuestionTimeout = null; // set by transport
     this.onIntroEnd = null;        // set by transport — fires when INTRO -> PROMPT
     this.onPromptEnd = null;       // set by transport — fires when PROMPT -> QUESTION
+    // FINAL-phase gate: flipped true once the host's podium animation
+    // finishes (via the `host:podiumDone` socket event). Player phones
+    // hold back the rank-reveal card until this is true so the standings
+    // aren't spoiled before the room sees them on the big screen. Reset
+    // to false on any new-game transition (intro start, reset).
+    this.podiumRevealed = false;
   }
 
   // ---------------- Lobby / players ----------------
@@ -179,6 +185,9 @@ class Game {
   _enterIntro() {
     this._clearTimers();
     this.phase = PHASES.INTRO;
+    // New game starting — clear any stale podium-reveal gate left over
+    // from a previous round so the next FINAL phase starts blocked again.
+    this.podiumRevealed = false;
     this.currentStartTs = Date.now();
     this.currentEndsAt = this.currentStartTs + INTRO_DURATION_MS;
     this._phaseTimer = setTimeout(() => {
@@ -382,17 +391,84 @@ class Game {
   }
 
   getLeaderboard(limit) {
-    const arr = Array.from(this.players.values())
-      .map((p) => ({ id: p.id, name: p.name, score: p.score, lastTs: p.lastScoringAnswerTs }))
+    // Sort by score desc. Tiebreak by name (case-insensitive) so the
+    // display order among tied players is deterministic and fair —
+    // NOT biased by join order (Map insertion order) or who happened
+    // to answer a scoring question earliest. The alphabetical sort is
+    // PURELY cosmetic: every player with the same score gets the SAME
+    // rank value below; alphabetical only decides which name appears
+    // above the other in the list when scores tie.
+    const sorted = Array.from(this.players.values())
+      .map((p) => ({ id: p.id, name: p.name, score: p.score }))
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
-        // earlier timestamp wins (non-zero preferred over zero)
-        const at = a.lastTs || Infinity;
-        const bt = b.lastTs || Infinity;
-        return at - bt;
-      })
-      .map((p, i) => ({ rank: i + 1, id: p.id, name: p.name, score: p.score }));
-    return typeof limit === 'number' ? arr.slice(0, limit) : arr;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
+
+    // Standard competition ranking ("1224"): every player with the same
+    // score gets the same rank; the next distinct score skips ahead by
+    // the size of the tie group. e.g. scores [1000, 900, 900, 800] yield
+    // ranks [1, 2, 2, 4]. Replaces the old timestamp-tiebreaker logic
+    // where ties were silently broken by who answered first.
+    const ranked = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const p = sorted[i];
+      const rank = (i > 0 && sorted[i - 1].score === p.score)
+        ? ranked[i - 1].rank
+        : i + 1;
+      ranked.push({ rank, id: p.id, name: p.name, score: p.score });
+    }
+    return typeof limit === 'number' ? ranked.slice(0, limit) : ranked;
+  }
+
+  // Top N for the between-question leaderboard panel. Returns:
+  //   { rows: <ranked rows, capped at `limit`>,
+  //     moreTiedAtLastRank: <how many additional players share the LAST
+  //                          shown rank but were cut off by the cap> }
+  // The host UI renders an honest "…and N more tied at rank X" line
+  // from `moreTiedAtLastRank` instead of silently hiding tied players
+  // that would otherwise have been bumped off the list by alphabetical
+  // order alone.
+  getLeaderboardTop(limit) {
+    const full = this.getLeaderboard();
+    if (typeof limit !== 'number' || full.length <= limit) {
+      return { rows: full, moreTiedAtLastRank: 0 };
+    }
+    const rows = full.slice(0, limit);
+    const lastShownRank = rows[rows.length - 1].rank;
+    let moreTied = 0;
+    for (let i = limit; i < full.length; i++) {
+      if (full[i].rank === lastShownRank) moreTied++;
+      else break;
+    }
+    return { rows, moreTiedAtLastRank: moreTied };
+  }
+
+  // Buckets players into up to 3 podium GROUPS by distinct rank — not
+  // by player count. Returns shape:
+  //   [{ rank, score, players: [{id, name}, ...] }, ...]
+  // With ties this can yield fewer than 3 groups (e.g. 5 players tied
+  // for 1st returns a single group with 5 players; no silver/bronze).
+  // Used by the host's final podium reveal so every player at a
+  // top-3 rank gets recognized, not just `array[0..2]`.
+  getPodiumGroups() {
+    const full = this.getLeaderboard();
+    if (full.length === 0) return [];
+    const groups = [];
+    for (const row of full) {
+      const last = groups[groups.length - 1];
+      if (last && last.rank === row.rank) {
+        last.players.push({ id: row.id, name: row.name });
+      } else {
+        if (groups.length >= 3) break;
+        groups.push({
+          rank: row.rank,
+          score: row.score,
+          players: [{ id: row.id, name: row.name }],
+        });
+      }
+    }
+    return groups;
   }
 
   getLobbyPlayers() {
@@ -409,14 +485,22 @@ class Game {
     if (!p || !q) return null;
     const a = p.answers.find((x) => x.questionId === q.id);
     const lb = this.getLeaderboard();
-    const rank = lb.findIndex((e) => e.id === playerId) + 1;
+    // Use the competition rank stored on the leaderboard row, NOT the
+    // array index. With ties, the index is just alphabetical position
+    // (e.g. all 116 players at 0 points all share rank 1, but the
+    // player who sorts 64th alphabetically would have read as "#64").
+    // `idx === -1` is unreachable given the `!p` guard above — players
+    // in `this.players` are always in `getLeaderboard()` — so the
+    // fallback is defensive only.
+    const idx = lb.findIndex((e) => e.id === playerId);
+    const rank = idx >= 0 ? lb[idx].rank : (lb.length || 1);
     return {
       questionId: q.id,
       answered: !!a,
       wasCorrect: a ? a.wasCorrect : false,
       pointsEarned: a ? a.points : 0,
       totalScore: p.score,
-      rank: rank || lb.length,
+      rank,
       totalPlayers: lb.length,
       isLastQuestion: this.currentIndex === this.questions.length - 1,
     };
@@ -439,6 +523,7 @@ class Game {
     this.currentIndex = -1;
     this.currentStartTs = 0;
     this.currentEndsAt = 0;
+    this.podiumRevealed = false;
   }
 }
 

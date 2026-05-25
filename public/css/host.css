@@ -232,20 +232,26 @@ body.host {
 }
 .players-panel h3 {
   margin: 0;
-  /* Was a flat 28px when the title was just "Players". Now that it reads
-     "Carly & Nick · Wedding Quiz", scale it up on wider hosts (TV / full
-     screen) but shrink on smaller windows so it doesn't overflow the
-     pill on the right. */
-  font-size: clamp(26px, 2.4vw, 38px);
+  /* Default size for the lobby title "Carly & Nick · Wedding Quiz".
+     The actual rendered size is set imperatively by `fitLobbyTitle()`
+     in host.js — it measures the row's available width (header minus
+     count pill minus gap) and shrinks the font until the title fits.
+     Pure-CSS attempts (vw clamp, cqi clamp) couldn't reliably account
+     for the count pill width as it grew with player count. */
+  font-size: 38px;
   line-height: 1.15;
   /* Match the topbar `.brand` palette — deep green title with the
      `.amp` span (from base.css) giving the `&` a pink accent. */
   color: var(--green-deep);
   letter-spacing: 0.02em;
-  /* Allow the title to take the lion's share of the row and the count
-     pill to keep its natural width. */
+  /* Title takes the lion's share of the row; count pill keeps its
+     natural width. `min-width: 0` lets the flex item shrink below
+     intrinsic content width so the pill never gets pushed off-row. */
   flex: 1 1 auto;
   min-width: 0;
+  /* Always single-line. fitLobbyTitle() guarantees the font is small
+     enough to fit; no need for overflow/ellipsis. */
+  white-space: nowrap;
 }
 .players-panel .count {
   background: var(--green-deep); color: white; padding: 4px 14px; border-radius: 999px;
@@ -565,6 +571,19 @@ body.host {
 .lb-row .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-row .score { font-weight: 700; color: var(--green-deep); font-variant-numeric: tabular-nums; }
 
+/* Honest overflow indicator on the between-question Top 5 panel: when
+   more players are tied at the last shown rank but got cut off by the
+   5-row cap, this line surfaces the count rather than letting the
+   alphabetical display tiebreaker look like a silent ranking. */
+.lb-overflow {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink-soft);
+  padding: 8px 4px 4px;
+  text-align: center;
+}
+
 .reveal-actions { text-align: center; margin-top: 48px; }
 
 /* ---- Final / Podium ---- */
@@ -643,7 +662,15 @@ body.host:has(#view-final.active) .host-main {
      skinny. `max-width: 1100px` gives the podium real visual weight
      against the now-full-height .full-lb sitting below it. */
   width: 100%;
-  align-items: end; max-width: 1100px; margin: 0 auto 56px;
+  /* Cards bottom-align in the grid so the per-tier `min-height` values
+     below produce a real Olympic-style stepped podium: gold is 30px
+     taller than silver, silver 20px taller than bronze, every single
+     time — tied or untied, mid-game or final. Content is hard-bounded
+     by the podiumCell renderer (max 2 names + optional overflow line),
+     so the cards never exceed their min-height; effectively the
+     heights are static. */
+  align-items: end;
+  max-width: 1100px; margin: 0 auto 56px;
 }
 
 /* "Now for the results..." intro shown for ~2 seconds before the podium
@@ -667,6 +694,15 @@ body.host:has(#view-final.active) .host-main {
 .final-view.pre-reveal .podium,
 .final-view.pre-reveal .full-lb { display: none; }
 .final-view.pre-reveal h2 { display: none; }
+/* During pre-reveal the intro is the ONLY visible child of the
+   flex-column .final-view. Without this override, the parent's
+   `justify-content: flex-start` pins the intro to the top of the
+   final view's row — which reads as "floating high", not centered.
+   Switching to `center` only while pre-reveal is active vertically
+   centers "Now for the results…" in the available height; we revert
+   to flex-start once the podium fades in so the podium sits at its
+   natural top position with the full leaderboard filling below. */
+.final-view.pre-reveal { justify-content: center; }
 /* Once the intro fades out, fully remove it from flex flow — otherwise
    its ~130px height (clamp(36,5vw,64)px + margins) is still reserved
    above the podium, pushing the whole final view down. */
@@ -676,11 +712,89 @@ body.host:has(#view-final.active) .host-main {
   box-shadow: var(--shadow-strong);
   opacity: 0; transform: translateY(40px);
   transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.2,.9,.25,1);
+  /* Tied podium cards render a TIE pill absolutely positioned at the top
+     of the card, so every card establishes a positioning context. */
+  position: relative;
+  /* Vertically center content inside the card. With fixed-step heights
+     per tier (.place-1/2/3 below), untied cards have whitespace at the
+     top/bottom of the card and tied multi-name cards fill more of it —
+     either way content sits in the middle and the card reads as
+     intentionally proportioned rather than label-floating-at-top. The
+     `gap` gives medal / names-list / score consistent breathing room so
+     a tied card (with names-list expanded into 2+ rows) doesn't feel
+     squished compared to the single-name cards next to it. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 .podium-step.visible { opacity: 1; transform: translateY(0); }
 .podium-step .medal { font-size: 52px; }
 .podium-step .name  { font-family: var(--font-serif); font-size: 28px; margin: 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .podium-step .score { color: var(--green-deep); font-weight: 700; font-size: 22px; }
+
+/* Empty slot: keeps the 3-column grid intact (so the gold card stays
+   centered in column 2) when a rank tier has no group — e.g. 5 players
+   tied for 1st means no rank-2 or rank-3 group exists, but we still
+   want the gold card centered, not pushed to the left column. */
+.podium-step.empty-slot {
+  visibility: hidden;
+  box-shadow: none;
+  background: none;
+}
+
+/* Multi-name tied card: vertically stacked names + optional "…and N more"
+   overflow line. Names use a slightly smaller font when tied so two fit
+   comfortably without breaking the card's visual balance against the
+   single-name cards next to it. */
+.podium-step .names-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Names within a tied card need clear line separation — otherwise two
+     22px names on adjacent lines visually merge. The outer .podium-step
+     `gap: 8px` already spaces names-list from medal/score, so we only
+     need internal row spacing here. */
+  gap: 6px;
+  margin: 0;
+  min-height: 0;
+}
+.podium-step .names-list .name { margin: 0; }
+.podium-step.tied .names-list .name {
+  font-size: 22px;
+  line-height: 1.2;
+}
+.podium-step .more-count {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--ink-soft);
+  font-size: 15px;
+  margin-top: 2px;
+}
+
+/* Small gold pill stamped at the top-center of any tied card. Hidden
+   during suspense (avoids tipping off that the spot is tied before
+   the names actually appear); fades in once the card transitions to
+   .revealed state, riding the same celebratory beat. */
+.podium-step .tie-pill {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--gold);
+  color: #2a210f;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+.podium-step.tied.revealed .tie-pill { opacity: 1; }
 /* While the winner's score is climbing, give it a subtle pulse + warm glow
    so the room feels the energy building. */
 .podium-step .score.rolling {
@@ -691,9 +805,25 @@ body.host:has(#view-final.active) .host-main {
   from { transform: scale(1); }
   to   { transform: scale(1.12); }
 }
-.podium-step.place-1 { background: linear-gradient(180deg, #fff 0%, #fff6db 100%); padding-top: 36px; }
-.podium-step.place-2 { background: linear-gradient(180deg, #fff 0%, #f5efea 100%); }
-.podium-step.place-3 { background: linear-gradient(180deg, #fff 0%, #fbeef0 100%); }
+/* Fixed (not min-) heights: `min-height` lets the card grow when a tied
+   tier renders multiple names + the "…and N more" line, which is exactly
+   what we saw in testing (silver with a tie almost matching gold's
+   height while solo bronze stayed at its floor). With a fixed `height`,
+   the Olympic step pattern is preserved regardless of tie count.
+
+   Heights are sized for the worst-case tied card: 48px vertical padding
+   + 52px medal + 8px gap + (~26 + 6 + ~26 + 6 + ~18) names-list with
+   2 names plus the overflow line + 8px gap + ~31px score ≈ 230px. So
+   bronze sits at 240px (smallest tier still fits a tied group). Silver
+   adds 25px and gold another 30px to keep the visible step ratio the
+   eye expects from a podium. The inner flex centering on .podium-step
+   distributes the leftover whitespace evenly above and below the
+   content, so untied single-name cards look intentionally roomy rather
+   than empty. `overflow: hidden` is a safety net for unexpected
+   content (extra-long names, etc.) so it can never break the steps. */
+.podium-step.place-1 { background: linear-gradient(180deg, #fff 0%, #fff6db 100%); padding-top: 36px; height: 295px; overflow: hidden; }
+.podium-step.place-2 { background: linear-gradient(180deg, #fff 0%, #f5efea 100%); height: 265px; overflow: hidden; }
+.podium-step.place-3 { background: linear-gradient(180deg, #fff 0%, #fbeef0 100%); height: 240px; overflow: hidden; }
 
 /* Suspense / reveal animations for the final podium reveal. */
 .podium-step .suspense-label {
@@ -752,6 +882,19 @@ body.host:has(#view-final.active) .host-main {
   transform: translateY(12px);
   transition: opacity 0.6s ease, transform 0.6s ease;
   pointer-events: none;
+}
+/* "Full scores" section heading. Default <h3> inherits near-black
+   text, which made it blend with the player names below. Pull it into
+   the deep-green host palette (matches topbar brand, lobby title, and
+   the score column), bump the size so it reads as a section header,
+   and add a hairline under-rule to separate it from the data rows. */
+.full-lb h3 {
+  color: var(--green-deep);
+  font-size: 28px;
+  letter-spacing: 0.02em;
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 .full-lb.visible {
   opacity: 1;

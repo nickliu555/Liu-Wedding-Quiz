@@ -185,11 +185,106 @@
       '</div>';
   }
 
-  function renderFinal() {
+  // Cached state:final payload (or the equivalent piece returned by the
+  // reconnect ack under `payload.final`). The reveal-rank moment is gated
+  // by `state:rankReveal` from the server, which arrives AFTER the host's
+  // podium animation completes, so we have to keep the leaderboard around
+  // long enough to render the player's rank once that gate opens.
+  let finalPayload = null;
+
+  function renderFinal(f) {
+    // Stash whatever the server sent so renderPlayerRank() can use it
+    // when the rank-reveal signal arrives (or right now, if the host
+    // already finished its podium reveal — i.e. on a refresh during the
+    // post-podium part of FINAL).
+    if (f) finalPayload = f;
+    if (finalPayload && finalPayload.podiumRevealed) {
+      renderPlayerRank();
+      return;
+    }
+    // Podium reveal still in progress on the host — show the holding
+    // copy and wait for `state:rankReveal` to flip us over to the rank
+    // card. This keeps the standings off the player phone until the
+    // room has seen them on the big screen.
     render(
       '<h2 class="serif">Thanks for playing! 💕</h2>' +
       '<p>Check the big screen for the winners.</p>'
     );
+  }
+
+  // Build and render the player's personal rank card. Only safe to call
+  // when `finalPayload.fullLeaderboard` is populated AND we want the
+  // standings revealed (i.e. `state:rankReveal` has fired, or the
+  // reconnect ack told us `podiumRevealed: true`).
+  function renderPlayerRank() {
+    if (!finalPayload || !Array.isArray(finalPayload.fullLeaderboard)) {
+      // Safety net: server should always send fullLeaderboard before
+      // signaling rank reveal, but if something raced just fall back to
+      // the placeholder copy so the player isn't staring at a blank view.
+      render(
+        '<h2 class="serif">Thanks for playing! 💕</h2>' +
+        '<p>Check the big screen for the winners.</p>'
+      );
+      return;
+    }
+    const lb = finalPayload.fullLeaderboard;
+    const me = lb.find(function (e) { return e.id === playerId; });
+    if (!me) {
+      // Player not in the leaderboard — most likely they were kicked or
+      // somehow stripped from game.players before final. Show a generic
+      // "thanks" without inventing a rank.
+      render(
+        '<h2 class="serif">Thanks for playing! 💕</h2>' +
+        '<p>Check the big screen for the winners.</p>'
+      );
+      return;
+    }
+    const rank = me.rank;
+    const totalPlayers = lb.length;
+    // Tie size = number of leaderboard rows sharing the same rank value.
+    // The server's `getLeaderboard()` uses competition ranking (1,2,2,4)
+    // so this count is reliable.
+    const tieCount = lb.filter(function (e) { return e.rank === rank; }).length;
+    const tied = tieCount > 1;
+
+    // Compose the headline copy. Top-3 get medal emojis + place labels;
+    // everyone else gets a "#X of Y" line. Tied players see "(N players)"
+    // (or "(N winners)" for tied first) right under the headline.
+    let medal = '';
+    let headline = '';
+    let needsOfTotal = false; // append "out of N players" below headline
+    if (rank === 1) {
+      medal = '🥇';
+      headline = tied ? 'Tied for the win!' : 'You won!';
+    } else if (rank === 2) {
+      medal = '🥈';
+      headline = tied ? 'Tied for 2nd Place' : '2nd Place';
+    } else if (rank === 3) {
+      medal = '🥉';
+      headline = tied ? 'Tied for 3rd Place' : '3rd Place';
+    } else {
+      headline = tied ? ('Tied at #' + rank) : ('#' + rank);
+      needsOfTotal = true;
+    }
+    const tieLine = tied
+      ? '<p class="rank-tied-count">' +
+          '(' + tieCount + (rank === 1 ? ' winners' : ' players') + ')' +
+        '</p>'
+      : '';
+    const totalLine = needsOfTotal
+      ? '<p class="rank-total">out of ' + totalPlayers + ' players</p>'
+      : '';
+    // Score is already shown in the sticky top bar chip; no need to
+    // repeat it here.
+
+    elView.innerHTML =
+      '<div class="state-card rank-reveal-card">' +
+        (medal ? '<div class="rank-medal" aria-hidden="true">' + medal + '</div>' : '') +
+        '<h2 class="serif rank-headline">' + headline + '</h2>' +
+        tieLine +
+        totalLine +
+        '<p class="rank-footnote">Thanks for playing! 💕</p>' +
+      '</div>';
   }
 
   function renderRejected(reason) {
@@ -492,7 +587,16 @@
           render('<h2 class="serif">Hold tight…</h2><p>Next question coming up.</p>');
         }
       }
-      else if (res.phase === 'FINAL') { setReactionsAllowed(true); renderFinal(); }
+      else if (res.phase === 'FINAL') {
+        setReactionsAllowed(true);
+        // Server stuffs `fullLeaderboard` + `podiumRevealed` into
+        // `res.final` on reconnect during FINAL (mid-flight join is
+        // blocked, so this is the only path back in once the game has
+        // ended). Feed it to renderFinal() so the phone either shows
+        // the holding copy (podium reveal still in progress) or jumps
+        // straight to the rank card (reveal already happened).
+        renderFinal(res.final || null);
+      }
     });
   });
 
@@ -616,12 +720,30 @@
     renderResult(res);
   });
 
-  socket.on('state:final', function () {
+  socket.on('state:final', function (f) {
     if (rejected) return;
     leaveLobbyWaiting();
     setReactionsAllowed(true);
     stopCountdown();
-    renderFinal();
+    renderFinal(f);
+  });
+
+  // Server fires this once the host's podium animation has finished and
+  // it's safe to show every player their personal rank. `renderFinal()`
+  // stashed the full leaderboard from `state:final` on this client, so
+  // we don't need a payload here — just the signal to flip.
+  socket.on('state:rankReveal', function () {
+    if (rejected) return;
+    if (!finalPayload) {
+      // We somehow received the rank-reveal signal without ever seeing
+      // `state:final` (shouldn't happen — server always broadcasts final
+      // first). Mark the flag so when state:final does arrive it renders
+      // straight to the rank card without making the player wait further.
+      finalPayload = { podiumRevealed: true };
+      return;
+    }
+    finalPayload.podiumRevealed = true;
+    renderPlayerRank();
   });
 
   socket.on('state:reset', function () {

@@ -131,13 +131,20 @@ function broadcastPrompt() {
 function broadcastReveal() {
   const q = game.getCurrentQuestion();
   if (!q) return;
+  // `getLeaderboardTop` returns both the capped rows AND the count of
+  // additional players tied at the last shown rank (cut off by the cap).
+  // The host renders an "…and N more tied at rank X" line from that
+  // count so genuinely tied players aren't silently hidden by the
+  // alphabetical display tiebreaker.
+  const top = game.getLeaderboardTop(5);
   const payload = {
     questionId: q.id,
     index: game.currentIndex,
     total: questions.length,
     correctIndex: q.correctIndex,
     distribution: game.getAnswerDistribution(),
-    leaderboardTop5: game.getLeaderboard(5),
+    leaderboardTop5: top.rows,
+    leaderboardTop5MoreTied: top.moreTiedAtLastRank,
     isLastQuestion: game.currentIndex === questions.length - 1,
     // 'timeout' | 'all-answered' | 'host' — drives the brief sting copy on
     // the host page ("Time's up!" vs. "Let's see the answers!").
@@ -155,8 +162,17 @@ function broadcastReveal() {
 function broadcastFinal() {
   const lb = game.getLeaderboard();
   io.emit('state:final', {
+    // `podium` (top 3 rows) kept for back-compat. The host now drives
+    // the podium reveal off `podiumGroups`, which buckets players by
+    // DISTINCT rank so every tied player at a top-3 rank gets shown
+    // (not just the first 3 by alphabetical order).
     podium: lb.slice(0, 3),
+    podiumGroups: game.getPodiumGroups(),
     fullLeaderboard: lb,
+    // Tells player phones whether the host has already finished its
+    // podium reveal. While false, phones hold back the rank card so
+    // they don't spoil the standings before the room sees them.
+    podiumRevealed: game.podiumRevealed,
   });
 }
 
@@ -234,6 +250,17 @@ io.on('connection', (socket) => {
       // card the player saw before refreshing (correct/wrong, +XYZ points,
       // rank) instead of falling back to a generic "Hold tight..." view.
       payload.myResult = game.getPlayerResult(pid);
+    } else if (game.phase === PHASES.FINAL) {
+      // On refresh during the final, give the phone enough state to render
+      // either the "Thanks for playing" placeholder (while the host is
+      // still mid-podium-reveal) or the rank-reveal card (if the host
+      // already signaled `host:podiumDone`). `podiumRevealed` is the
+      // gate; player code chooses which to render based on that flag.
+      const lb = game.getLeaderboard();
+      payload.final = {
+        fullLeaderboard: lb,
+        podiumRevealed: game.podiumRevealed,
+      };
     }
     ack && ack(payload);
     broadcastLobby();
@@ -245,8 +272,13 @@ io.on('connection', (socket) => {
     if (!res.ok) return ack && ack(res);
     ack && ack({ ok: true, locked: true });
     broadcastAnswerCount();
-    // If answering caused an early end, the game.phase is now REVEAL.
-    if (game.phase === PHASES.REVEAL) broadcastReveal();
+    // NOTE: do NOT call broadcastReveal() here even if answering caused
+    // an early end. game._endQuestion() already fires the
+    // `onQuestionTimeout` callback (see line 183), which is wired to
+    // broadcastReveal(). Adding a manual call here double-emits
+    // state:reveal — the host then schedules two stings and the chime
+    // plays twice (i.e. the "2 dings on reveal" bug). The callback is
+    // the single source of truth for QUESTION -> REVEAL transitions.
   });
 
   // ---- Reactions (player -> host floating emojis) ----
@@ -319,13 +351,15 @@ io.on('connection', (socket) => {
         // Send the question first so the host has currentQ populated
         // (needed to render choice text in the distribution rows).
         socket.emit('state:question', pub);
+        const top = game.getLeaderboardTop(5);
         socket.emit('state:reveal', {
           questionId: q.id,
           index: game.currentIndex,
           total: questions.length,
           correctIndex: q.correctIndex,
           distribution: game.getAnswerDistribution(),
-          leaderboardTop5: game.getLeaderboard(5),
+          leaderboardTop5: top.rows,
+          leaderboardTop5MoreTied: top.moreTiedAtLastRank,
           isLastQuestion: game.currentIndex === questions.length - 1,
           // On host refresh we don't replay the sting — they're past it.
           endReason: 'replay',
@@ -333,7 +367,12 @@ io.on('connection', (socket) => {
       }
     } else if (game.phase === PHASES.FINAL) {
       const lb = game.getLeaderboard();
-      socket.emit('state:final', { podium: lb.slice(0, 3), fullLeaderboard: lb });
+      socket.emit('state:final', {
+        podium: lb.slice(0, 3),
+        podiumGroups: game.getPodiumGroups(),
+        fullLeaderboard: lb,
+        podiumRevealed: game.podiumRevealed,
+      });
     }
   });
 
@@ -369,7 +408,11 @@ io.on('connection', (socket) => {
       broadcastQuestion();
       ack && ack({ ok: true, advanced: 'question' });
     } else if (res.phase === PHASES.REVEAL) {
-      broadcastReveal();
+      // Do NOT call broadcastReveal() here. When advance() lands on
+      // REVEAL it's because game._endQuestion('host') ran, which has
+      // already fired the `onQuestionTimeout` callback → broadcastReveal.
+      // Calling it again would double-emit state:reveal (same "2 dings"
+      // class of bug as the player:answer handler above).
       ack && ack({ ok: true, advanced: 'reveal' });
     } else if (res.phase === PHASES.FINAL) {
       broadcastFinal();
@@ -388,6 +431,28 @@ io.on('connection', (socket) => {
     }
     ack && ack({ ok: true });
     broadcastLobby();
+  });
+
+  // Host signals that its podium reveal animation has finished playing.
+  // We flip the FINAL-phase gate and broadcast `state:rankReveal` so all
+  // player phones flip from "Thanks for playing" to their personal rank
+  // card in unison. The broadcast fires only on the FIRST flip — if the
+  // host page is refreshed and re-runs its reveal animation, a second
+  // `host:podiumDone` is acknowledged but doesn't re-blast clients with
+  // a duplicate signal. Only honored while we're actually in FINAL;
+  // out-of-phase calls would otherwise stamp the flag during the next
+  // round's INTRO and spoil the new game.
+  socket.on('host:podiumDone', (_p, ack) => {
+    if (!requireHost(ack)) return;
+    if (game.phase !== PHASES.FINAL) {
+      return ack && ack({ ok: false, reason: 'not-final' });
+    }
+    const wasAlreadyRevealed = game.podiumRevealed;
+    game.podiumRevealed = true;
+    if (!wasAlreadyRevealed) {
+      io.emit('state:rankReveal');
+    }
+    ack && ack({ ok: true, alreadyRevealed: wasAlreadyRevealed });
   });
 
   socket.on('host:reset', (_p, ack) => {

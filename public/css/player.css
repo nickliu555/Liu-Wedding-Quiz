@@ -253,6 +253,45 @@ body.player.urgent .urgent-bar {
 .result-points  { font-size: 42px; font-weight: 700; margin: 10px 0; }
 .result-rank    { color: var(--ink-soft); }
 
+/* ---- Final rank-reveal card -----------------------------------------
+   Shown on each player's phone once the host has finished its podium
+   animation (server emits `state:rankReveal`). Visually heavier than a
+   normal state-card: large medal at the top for podium finishers,
+   serif headline, supporting tie/total/score lines. Entrance animation
+   sells it as a reveal moment, not a static info dump. */
+.rank-reveal-card {
+  animation: rankRevealIn 0.6s cubic-bezier(.2,.9,.25,1) both;
+}
+.rank-reveal-card .rank-medal {
+  font-size: 72px;
+  line-height: 1;
+  margin: 4px 0 10px;
+}
+.rank-reveal-card .rank-headline {
+  font-size: 32px;
+  margin: 0 0 6px;
+}
+.rank-reveal-card .rank-tied-count {
+  font-style: italic;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.rank-reveal-card .rank-total {
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+.rank-reveal-card .rank-footnote {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+@keyframes rankRevealIn {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
 /* Prevent iOS zoom on double-tap */
 html { touch-action: manipulation; }
 

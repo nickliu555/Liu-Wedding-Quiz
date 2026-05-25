@@ -343,6 +343,42 @@
     return s.charAt(0).toUpperCase();
   }
 
+  // Shrink the lobby title ("Carly & Nick · Wedding Quiz") to whatever
+  // font size fits beside the count pill on its single line. CSS alone
+  // can't do this reliably because the pill's width changes with the
+  // player count and `vw`/`cqi` units don't know about the pill at all
+  // — earlier attempts either left the title overflowing the pill, or
+  // truncated it with ellipsis. This is a hard contract: the title
+  // must ALWAYS be fully visible.
+  //
+  // Cost: ~25 DOM reads on every renderLobby() call. Each measurement
+  // is just `scrollWidth` on a single element; well under 1ms in
+  // practice. Idempotent — safe to call repeatedly.
+  function fitLobbyTitle() {
+    const header = document.querySelector('.players-panel .header');
+    if (!header) return;
+    const titleEl = header.querySelector('h3');
+    if (!titleEl) return;
+    const countEl = header.querySelector('.count');
+    const headerStyle = getComputedStyle(header);
+    const gap = parseFloat(headerStyle.columnGap || headerStyle.gap || '0') || 0;
+    const headerWidth = header.clientWidth;
+    const countWidth = countEl ? countEl.offsetWidth : 0;
+    const available = Math.max(0, headerWidth - countWidth - gap);
+    // Start at the design-max font size and shrink in 1px steps until
+    // it fits. Linear search is fine — at most 28 iterations for the
+    // 38px..10px range, each just one scrollWidth read.
+    const MAX = 38;
+    const MIN = 10;
+    for (let size = MAX; size >= MIN; size--) {
+      titleEl.style.fontSize = size + 'px';
+      if (titleEl.scrollWidth <= available) return;
+    }
+    titleEl.style.fontSize = MIN + 'px';
+  }
+  // Re-fit on window resize too (fullscreen toggle, window drag, etc.).
+  window.addEventListener('resize', fitLobbyTitle);
+
   function renderLobby(s) {
     const players = s.players || [];
     // Heart-pulse the count badge whenever the roster grows.
@@ -354,6 +390,10 @@
     }
     lastPlayerCount = players.length;
     playerCount.textContent = players.length + (players.length === 1 ? ' player' : ' players');
+    // The count pill just grew ("9 players" -> "115 players" widens it
+    // by ~30px) so the lobby title may no longer fit. Re-fit on every
+    // render — cheap and idempotent. See fitLobbyTitle() below.
+    fitLobbyTitle();
 
     playerList.innerHTML = players.map(function (p) {
       const isNew = !lobbyFirstRender && !knownPids.has(p.id);
@@ -760,9 +800,14 @@
     overlay.classList.add(reason);
     // Trigger fade-in on next frame so the CSS transition runs.
     requestAnimationFrame(function () { overlay.classList.add('visible'); });
-    // Audio: timeout already has the alarm beep from the per-second tick
-    // at 0s, so we stay quiet there. For 'all-answered' we play a short
-    // upward chime to mark the beat ("ding! — let's see the answers").
+    // Audio: timeout already has the alarm tick at 0s from the per-second
+    // countdown, so we stay quiet there to avoid stepping on it. For
+    // 'all-answered' the question ended early with no countdown alarm,
+    // so we play the two-note reveal chime — a quick "ding-ding" cue
+    // that the answer is about to slide in. Fires exactly once per
+    // reveal thanks to the server-side single-emission contract for
+    // state:reveal (see server/index.js + the regression tests in
+    // server/game.test.js).
     if (reason === 'all-answered') {
       playRevealChime();
     }
@@ -774,10 +819,14 @@
     setTimeout(function () { overlay.classList.remove('visible'); }, STING_VISIBLE_MS);
   }
 
-  // (No tone helper needed — the sting is purely visual.)
-
   // Short two-note upward chime played alongside "Let's see the answers!".
-  // Light, glockenspiel-ish — won't step on the reveal SFX that follows.
+  // G5 -> C6, ~130ms apart — reads as a single pleasant "ding-ding"
+  // (not two separate dings). The server's onQuestionTimeout callback
+  // is the single source of truth for the QUESTION->REVEAL transition
+  // (see server/index.js + the game.test.js single-emission tests), so
+  // this fires exactly once per reveal — if the two-note chime ever
+  // sounds like it's playing twice or the notes feel too far apart,
+  // that's the symptom of state:reveal being double-emitted again.
   function playRevealChime() {
     if (!soundOn) return;
     const ctx = getAudioCtx();
@@ -1055,7 +1104,7 @@
       );
     }).join('');
 
-    leaderboard.innerHTML = r.leaderboardTop5.map(function (e) {
+    var rowsHtml = r.leaderboardTop5.map(function (e) {
       return (
         '<div class="lb-row">' +
           '<div class="rank">' + e.rank + '</div>' +
@@ -1064,6 +1113,19 @@
         '</div>'
       );
     }).join('');
+    // Honest overflow indicator: when more players are tied at the last
+    // shown rank but were cut off by the 5-row cap, surface that count
+    // rather than silently hiding them (the alphabetical display
+    // tiebreaker would otherwise look like a hidden ranking).
+    var moreTied = r.leaderboardTop5MoreTied || 0;
+    if (moreTied > 0 && r.leaderboardTop5.length > 0) {
+      var lastShownRank = r.leaderboardTop5[r.leaderboardTop5.length - 1].rank;
+      rowsHtml +=
+        '<div class="lb-overflow">' +
+          '…and ' + moreTied + ' more tied at rank ' + lastShownRank +
+        '</div>';
+    }
+    leaderboard.innerHTML = rowsHtml;
 
     // On the last question, hide the Top 5 entirely so the host doesn't
     // spoil the podium reveal that's coming up next. Also collapse the
@@ -1135,14 +1197,28 @@
   }
 
   function runPodiumReveal(f) {
-    var p = f.podium || [];
-    var p1 = p[0], p2 = p[1], p3 = p[2];
+    // `podiumGroups` buckets players by DISTINCT rank (up to 3 groups),
+    // so a tied group at any spot is rendered together in a single card
+    // with a TIE pill. If a rank is empty (e.g. 5 tied for 1st means no
+    // rank-2 group exists), we render an invisible placeholder card to
+    // keep the gold card centered in the 3-column grid.
+    var groups = (f && f.podiumGroups) || [];
+    // Fallback to legacy `podium` array shape if server didn't send
+    // groups (shouldn't happen post-rollout, but keeps host robust).
+    if (groups.length === 0 && f && f.podium && f.podium.length) {
+      groups = f.podium.map(function (e) {
+        return { rank: e.rank, score: e.score, players: [{ id: e.id, name: e.name }] };
+      });
+    }
+    var g1 = groups[0]; // rank 1 (winner group)
+    var g2 = groups[1]; // rank 2 (may be undefined if rank 1 is a big tie)
+    var g3 = groups[2]; // rank 3 (may be undefined)
 
-    // DOM order: 2nd, 1st, 3rd (so 1st is centered visually).
+    // DOM order: 2nd, 1st, 3rd (so 1st is centered visually in the grid).
     podium.innerHTML =
-      podiumCell('place-2', '🥈', p2) +
-      podiumCell('place-1', '🥇', p1) +
-      podiumCell('place-3', '🥉', p3);
+      podiumCell('place-2', '🥈', g2) +
+      podiumCell('place-1', '🥇', g1) +
+      podiumCell('place-3', '🥉', g3);
 
     // Render the full leaderboard but keep it hidden until after the
     // winner has been announced — otherwise the rest of the standings
@@ -1161,34 +1237,43 @@
     fullLb.classList.remove('visible');
 
     var steps = podium.querySelectorAll('.podium-step');
-    // [DOM 2nd, DOM 1st, DOM 3rd] — reveal order is 3rd, 2nd, 1st.
-    var revealQueue = [
-      { el: steps[2], entry: p3, tier: 3, label: 'Third place is…',  isWinner: false },
-      { el: steps[0], entry: p2, tier: 2, label: 'Second place is…', isWinner: false },
-      { el: steps[1], entry: p1, tier: 1, label: 'And the winner is…', isWinner: true  },
-    ];
+    // steps[0] = 2nd slot, steps[1] = 1st slot, steps[2] = 3rd slot.
+    // Build reveal queue bottom-up by rank, skipping any rank group
+    // that doesn't exist (so a giant rank-1 tie just reveals one card).
+    var revealQueue = [];
+    function suspenseLabel(tier, tied) {
+      if (tier === 3) return tied ? 'Tied for third are…' : 'Third place is…';
+      if (tier === 2) return tied ? 'Tied for second are…' : 'Second place is…';
+      return tied ? 'And tied for the win are…' : 'And the winner is…';
+    }
+    if (g3) revealQueue.push({ el: steps[2], group: g3, tier: 3, label: suspenseLabel(3, g3.players.length > 1), isWinner: false });
+    if (g2) revealQueue.push({ el: steps[0], group: g2, tier: 2, label: suspenseLabel(2, g2.players.length > 1), isWinner: false });
+    if (g1) revealQueue.push({ el: steps[1], group: g1, tier: 1, label: suspenseLabel(1, g1.players.length > 1), isWinner: true  });
 
     // Pre-set each podium step to its "suspense" state: visible card with
-    // medal + dots, no name/score yet. The .visible class makes the card
-    // fade in with the slide-up transition.
+    // medal + dots, name(s) and score hidden behind a label. Final names
+    // and score are stashed in dataset attrs so the reveal step can
+    // restore them.
     revealQueue.forEach(function (slot) {
       if (!slot.el) return;
       slot.el.classList.add('suspense');
-      var nameEl = slot.el.querySelector('.name');
+      var namesList = slot.el.querySelector('.names-list');
       var scoreEl = slot.el.querySelector('.score');
-      if (nameEl) {
-        nameEl.dataset.finalName = nameEl.textContent;
-        nameEl.innerHTML = '<span class="suspense-label">' + slot.label + '</span><span class="suspense-dots"><span></span><span></span><span></span></span>';
+      if (namesList) {
+        namesList.dataset.finalHtml = namesList.innerHTML;
+        namesList.innerHTML =
+          '<span class="suspense-label">' + slot.label + '</span>' +
+          '<span class="suspense-dots"><span></span><span></span><span></span></span>';
       }
       if (scoreEl) {
-        scoreEl.dataset.finalScore = (slot.entry && slot.entry.score) || 0;
+        scoreEl.dataset.finalScore = (slot.group && slot.group.score) || 0;
         scoreEl.textContent = '';
       }
     });
 
     var cursor = 400;
     revealQueue.forEach(function (slot, i) {
-      if (!slot.el || !slot.entry) return;
+      if (!slot.el || !slot.group) return;
 
       // 1. Card slides in + drumroll begins. Winner's drumroll runs longer
       //    so it covers the score climb + tension hold without a silent
@@ -1198,20 +1283,23 @@
       setTimeout(function () {
         slot.el.classList.add('visible');
         var stopRoll = playDrumroll(rollDur);
-        // After suspense ends, reveal name + score together for every spot
-        // (winner included). Previously the winner had a two-beat reveal
-        // — score rolled first, name appeared ~1s later — which felt like
-        // lag rather than tension. Now every podium spot reveals the same
-        // way; the winner still gets the extra cheer/confetti/banner.
+        // After suspense ends, reveal name(s) + score together for every
+        // spot (winner included). Names in a tied group pop in sequentially
+        // with a ~150ms beat so it reads as celebration rather than
+        // dropping a list on screen.
         setTimeout(function () {
-          var nameEl = slot.el.querySelector('.name');
+          var namesList = slot.el.querySelector('.names-list');
           var scoreEl = slot.el.querySelector('.score');
           var finalScore = scoreEl ? parseInt(scoreEl.dataset.finalScore || '0', 10) : 0;
 
           if (typeof stopRoll === 'function') stopRoll();
-          if (nameEl) {
-            nameEl.textContent = nameEl.dataset.finalName || (slot.entry.name || '');
-            nameEl.classList.add('revealed');
+          if (namesList) {
+            namesList.innerHTML = namesList.dataset.finalHtml || '';
+            var nameEls = namesList.querySelectorAll('.name');
+            nameEls.forEach(function (n, idx) {
+              n.style.animationDelay = (idx * 0.15) + 's';
+              n.classList.add('revealed');
+            });
           }
           slot.el.classList.remove('suspense');
           slot.el.classList.add('revealed');
@@ -1232,6 +1320,17 @@
             // Now the full standings can come up — they no longer spoil
             // anything since the winner is revealed.
             setTimeout(function () { fullLb.classList.add('visible'); }, 1100);
+            // Signal the server that the podium reveal is fully done.
+            // The server will broadcast `state:rankReveal` to every
+            // player phone so they all flip from "Thanks for playing"
+            // to their personal rank card in unison. We wait ~800ms
+            // after the full leaderboard fades in so the room has a
+            // beat to admire the winner before phones start buzzing.
+            // Server-side guard ignores duplicate signals if the host
+            // page is refreshed and runs the reveal again.
+            setTimeout(function () {
+              socket.emit('host:podiumDone');
+            }, 1100 + 800);
           }
         }, SUSPENSE_MS);
       }, cursor);
@@ -1256,15 +1355,38 @@
     requestAnimationFrame(step);
   }
 
-  function podiumCell(klass, medal, entry) {
-    if (!entry) {
-      return '<div class="podium-step ' + klass + '"></div>';
+  function podiumCell(klass, medal, group) {
+    // Empty slot when this rank tier has no group (e.g. 5 tied for 1st
+    // means no rank-2 group exists). Render an invisible placeholder so
+    // the visible card stays in its grid column — keeps the gold card
+    // centered in the 3-column layout.
+    if (!group) {
+      return '<div class="podium-step ' + klass + ' empty-slot"></div>';
     }
+    var tied = group.players.length > 1;
+    // Per-surface visible-name cap: podium cards are vertically constrained
+    // and need to stay visually balanced across the three columns, so we
+    // show fewer names than the Top 5 panel and surface the rest as a
+    // single "…and N more" line.
+    var VISIBLE_MAX = 2;
+    var visible = group.players.slice(0, VISIBLE_MAX);
+    var overflow = group.players.length - visible.length;
+    var namesHtml =
+      '<div class="names-list">' +
+        visible.map(function (p) {
+          return '<div class="name">' + escapeHtml(p.name) + '</div>';
+        }).join('') +
+        (overflow > 0
+          ? '<div class="more-count">…and ' + overflow + ' more</div>'
+          : '') +
+      '</div>';
+    var pillHtml = tied ? '<div class="tie-pill">TIE</div>' : '';
     return (
-      '<div class="podium-step ' + klass + '">' +
+      '<div class="podium-step ' + klass + (tied ? ' tied' : '') + '">' +
+        pillHtml +
         '<div class="medal">' + medal + '</div>' +
-        '<div class="name">' + escapeHtml(entry.name) + '</div>' +
-        '<div class="score">' + entry.score + ' pts</div>' +
+        namesHtml +
+        '<div class="score">' + group.score + ' pts</div>' +
       '</div>'
     );
   }
@@ -1318,6 +1440,8 @@
       // Small beat on blank, then the sting.
       setTimeout(function () { playSting(reason); }, 120);
       // Reveal renders after the sting fades out + a short blank breath.
+      // The sting is purely visual, so sfxReveal inside renderReveal()
+      // is the single "ding" cue for the transition.
       setTimeout(function () { renderReveal(r); }, 120 + STING_VISIBLE_MS + 350);
     } else {
       renderReveal(r);

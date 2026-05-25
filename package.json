@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
-    "test": "node server/scoring.test.js && node server/questions.test.js"
+    "test": "node server/scoring.test.js && node server/questions.test.js && node server/game.test.js"
   },
   "engines": {
     "node": ">=18"
