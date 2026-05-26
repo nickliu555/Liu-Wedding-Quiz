@@ -411,6 +411,19 @@ function buildGameForResult(pairs) {
   assertEq(res.rank, 1, 'getPlayerResult: rank unaffected by connected status');
 }
 
+// Result payload exposes the correct answer text + index so the player
+// client (Announcement Mode) can render a colored "B Florida" line on
+// the result card for wrong / no-answer outcomes. Default-mode UI
+// ignores these fields; adding them is a pure superset.
+{
+  // buildGameForResult seeds questions with choices ['A','B','C','D']
+  // and correctIndex 0, so the expected text is 'A'.
+  const g = buildGameForResult([['Avery', 100]]);
+  const res = g.getPlayerResult('pid-Avery');
+  assertEq(res.correctIndex, 0, 'getPlayerResult: correctIndex echoes question.correctIndex');
+  assertEq(res.correctChoice, 'A', 'getPlayerResult: correctChoice is question.choices[correctIndex]');
+}
+
 // --- podiumRevealed lifecycle ---
 // Gates the player-screen rank reveal. Must start false on a fresh
 // game, must survive an in-game `_enterIntro` (it gets cleared then

@@ -455,7 +455,7 @@
     // stale state attached.
     if (startAnsweringRow) startAnsweringRow.hidden = true;
     if (revealToPhonesRow) revealToPhonesRow.hidden = true;
-    document.body.classList.remove('host-prompt-only', 'host-announcement-prompt', 'host-prompt-instant');
+    document.body.classList.remove('host-prompt-only', 'host-announcement-prompt', 'host-prompt-instant', 'host-final-question');
     qTotal.textContent = initial.questionsTotal;
     rTotal.textContent = initial.questionsTotal;
     renderQR();
@@ -1079,7 +1079,7 @@
       // start the countdown. Removing the class on the same frame is fine
       // because we don't want a fade — the DJ has just said "go" and the
       // timer should appear immediately.
-      document.body.classList.remove('host-announcement-prompt');
+      document.body.classList.remove('host-announcement-prompt', 'host-final-question');
       startQTimer(q);
     } else if (wasPromptOnly) {
       // Drop the prompt-only class on the next frame so the browser has a
@@ -1139,7 +1139,14 @@
     // the original implementation.
     if (announcementMode) {
       // No "💍 Final Question!" splash — the DJ owns the dramatic intro
-      // in Announcement Mode. Skip the sting entirely.
+      // in Announcement Mode. Skip the sting entirely, but DO show a soft
+      // "💍 Final Question" pill under the "Question X of Y" meta line
+      // during the PROMPT phase of the very last question so the operator
+      // (and any audience members glancing at the host screen) get a
+      // gentle heads-up. Visibility is CSS-driven; the body class auto-
+      // hides the pill once host-announcement-prompt is removed (or the
+      // class is cleared on the next question's prompt).
+      document.body.classList.toggle('host-final-question', !!(p && p.isLastQuestion));
       qIndex.textContent = (p.index + 1);
       qTotal.textContent = p.total;
       qPrompt.textContent = p.prompt;
@@ -1181,6 +1188,10 @@
       return;
     }
     // ---- Default mode (announcementMode === false) ----
+    // Default mode uses the splash sting (showFinalQuestionSting) instead
+    // of the pill, so make sure the announcement-only body class is never
+    // left over from a prior run / mode toggle.
+    document.body.classList.remove('host-final-question');
     // For the very last question, briefly show a "💍 Final Question!" splash
     // before the prompt content becomes readable. The server has padded
     // this prompt phase with extra time so the regular cadence is preserved.

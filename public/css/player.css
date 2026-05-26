@@ -234,31 +234,64 @@ body.player.player-waiting .petal-layer { display: block; }
   transition: transform 0.08s ease, opacity 0.2s ease;
   text-align: left;
 }
-/* Per-row soft tint of the choice color (~14% over white) PLUS a darker
-   border in the same color family (~30% black mix) for chunky Duolingo-
-   style color identity. The badge keeps the saturated color so the
-   tile-to-badge contrast still reads, while the row gains a visible
-   colored outline. Two-class selectors beat the single-class
+/* Per-row soft tint of the choice color (~14% over white) PLUS a 2px
+   pastel border in the same color family (~45% color + white) for a
+   soft, wedding-palette-friendly edge that gives separation from the
+   white card without contradicting the app's romantic pastel feel.
+   The badge keeps its saturated mid-tone so the badge-vs-tile contrast
+   still reads. Two-class selectors beat the single-class
    `.tile-color-N` rules in base.css that would otherwise paint the row
    solid (those still apply to `.row-badge` alone, which we want). */
 .row-tile.tile-color-0 {
   background: color-mix(in srgb, var(--tile-1) 14%, white);
-  border-color: color-mix(in srgb, var(--tile-1) 70%, black);
+  border-color: color-mix(in srgb, var(--tile-1) 45%, white);
 }
 .row-tile.tile-color-1 {
   background: color-mix(in srgb, var(--tile-2) 14%, white);
-  border-color: color-mix(in srgb, var(--tile-2) 70%, black);
+  border-color: color-mix(in srgb, var(--tile-2) 45%, white);
 }
 .row-tile.tile-color-2 {
   background: color-mix(in srgb, var(--tile-3) 14%, white);
-  border-color: color-mix(in srgb, var(--tile-3) 70%, black);
+  border-color: color-mix(in srgb, var(--tile-3) 45%, white);
 }
 .row-tile.tile-color-3 {
   background: color-mix(in srgb, var(--tile-4) 14%, white);
-  border-color: color-mix(in srgb, var(--tile-4) 70%, black);
+  border-color: color-mix(in srgb, var(--tile-4) 45%, white);
 }
 .row-tile:active   { transform: scale(0.98); }
 .row-tile:disabled { opacity: 0.35; }
+
+/* ---- Announcement Mode: result-card correct-answer tile -------------
+   Reuses the exact .row-tile visual from the question page (colored
+   border + soft tint + badge + answer text) as a non-interactive
+   display element on the player's result card. Lives below the rank
+   line with a clear gap so it reads as supplementary info. A green
+   check sits inside the tile on the right edge — part of the tile
+   itself, not a floating sibling — to mark it as "the correct answer". */
+.result-answer-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 28px 0 4px;
+  width: 100%;
+}
+.result-answer-wrap .row-tile-display {
+  width: 100%;
+  max-width: min(360px, calc(100% - 24px));
+  cursor: default;
+  pointer-events: none;
+}
+.result-answer-wrap .row-tile-display:active { transform: none; }
+/* Green confirmation check on the right edge of the display tile. Sits
+   inside the tile alongside the badge and text, so the trio reads as
+   one cohesive "this is the correct answer" row. */
+.row-check {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: var(--green-deep);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
 .row-badge {
   flex: 0 0 48px;
   width: 48px;

@@ -120,7 +120,7 @@
       elView.innerHTML =
         '<div class="state-card prompt-card">' +
           '<div class="intro-hint">Question ' + (p.index + 1) + ' of ' + p.total + '</div>' +
-          '<h2 class="serif">Listen up! 🎤</h2>' +
+          '<h2 class="serif">🎤 Listen up! 🎤</h2>' +
           '<p>The DJ is reading the next question.</p>' +
           '<p style="margin-top:10px; color: var(--muted); font-size: 14px;">Choices appear in a moment…</p>' +
         '</div>';
@@ -268,6 +268,28 @@
     const heading = res.answered
       ? (correct ? 'Correct! 🎉' : 'Not quite…')
       : 'Too slow!';
+    // Announcement Mode only, and only when the player got it wrong or
+    // didn't answer: render a non-interactive copy of the correct row
+    // tile (same Duolingo-style row from the question page — colored
+    // border, badge, answer text). Reusing the row-tile visual language
+    // keeps the result card tied to what they saw a moment ago, without
+    // inventing any new primitive. Correct outcomes skip this (clean
+    // win card stays clean).
+    const showAnswer = announcementMode
+      && !correct
+      && typeof res.correctIndex === 'number'
+      && typeof res.correctChoice === 'string';
+    const answerMarkup = showAnswer
+      ? ('<div class="result-answer-wrap">' +
+           '<div class="row-tile row-tile-display tile-color-' + res.correctIndex + '" ' +
+                'role="img" ' +
+                'aria-label="Correct answer: ' + CHOICE_LETTERS[res.correctIndex] + ' ' + escapeHtml(res.correctChoice) + '">' +
+             '<span class="row-badge tile-color-' + res.correctIndex + '" aria-hidden="true">' + shape(res.correctIndex) + '</span>' +
+             '<span class="row-text">' + escapeHtml(res.correctChoice) + '</span>' +
+             '<span class="row-check" aria-hidden="true">✓</span>' +
+           '</div>' +
+         '</div>')
+      : '';
     elView.innerHTML =
       '<div class="state-card">' +
         '<h2 class="serif ' + klass + '">' + heading + '</h2>' +
@@ -284,7 +306,13 @@
               ? '<p class="result-rank">Final results coming up — listen to the DJ! 🎤</p>'
               : '<p class="result-rank">Final results coming up on the big screen…</p>')
           : '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>') +
+        answerMarkup +
       '</div>';
+
+    // After the result card is in the DOM, shrink the row tile's text if
+    // it would overflow the fixed-width tile (same fitText pass the
+    // question page uses). No-op when the tile isn't rendered.
+    if (showAnswer) fitAllRowTexts();
   }
 
   // Cached state:final payload (or the equivalent piece returned by the
@@ -310,7 +338,9 @@
     // room has seen them on the big screen.
     render(
       '<h2 class="serif">Thanks for playing! 💕</h2>' +
-      '<p>Check the big screen for the winners.</p>'
+      (announcementMode
+        ? '<p>Listen to the DJ for the winners!</p>'
+        : '<p>Check the big screen for the winners.</p>')
     );
   }
 
@@ -325,7 +355,9 @@
       // the placeholder copy so the player isn't staring at a blank view.
       render(
         '<h2 class="serif">Thanks for playing! 💕</h2>' +
-        '<p>Check the big screen for the winners.</p>'
+        (announcementMode
+          ? '<p>Listen to the DJ for the winners!</p>'
+          : '<p>Check the big screen for the winners.</p>')
       );
       return;
     }
@@ -337,7 +369,9 @@
       // "thanks" without inventing a rank.
       render(
         '<h2 class="serif">Thanks for playing! 💕</h2>' +
-        '<p>Check the big screen for the winners.</p>'
+        (announcementMode
+          ? '<p>Listen to the DJ for the winners!</p>'
+          : '<p>Check the big screen for the winners.</p>')
       );
       return;
     }
@@ -798,7 +832,10 @@
     if (rejected) return;
     setReactionsAllowed(true);
     if (!lastResult || (currentQuestion && lastResult.questionId !== currentQuestion.id)) {
-      render('<h2 class="serif">Hold tight…</h2><p>Results on the big screen.</p>');
+      render('<h2 class="serif">Hold tight…</h2>' +
+        (announcementMode
+          ? '<p>Listen to the DJ!</p>'
+          : '<p>Results on the big screen.</p>'));
     }
     if (pendingResult) {
       var res = pendingResult;

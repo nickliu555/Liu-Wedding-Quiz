@@ -556,6 +556,13 @@ class Game {
       rank,
       totalPlayers: lb.length,
       isLastQuestion: this.currentIndex === this.questions.length - 1,
+      // The correct answer's index + text. Used by the player client in
+      // Announcement Mode to render a single colored "B Florida" line on
+      // the result card when the player got the question wrong or didn't
+      // answer. Default-mode UI ignores these fields, so adding them is a
+      // pure superset of the previous payload — no contract changes.
+      correctIndex: q.correctIndex,
+      correctChoice: q.choices[q.correctIndex],
     };
   }
 
