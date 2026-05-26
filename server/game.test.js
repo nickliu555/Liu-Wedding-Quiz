@@ -440,6 +440,118 @@ function buildGameForResult(pairs) {
   g._clearTimers();
 }
 
+// --- Announcement Mode ---
+//
+// Announcement Mode is a DJ-led fallback for venues where the host screen
+// isn't visible. When ON: PROMPT phase does NOT auto-advance; the host
+// triggers QUESTION manually via `startAnsweringNow()`. The flag is
+// lockable only in LOBBY \u2014 once `start()` runs it can't be flipped.
+
+{
+  // Default state and lobby-only mutability.
+  const g = new Game([
+    { id: 'q1', prompt: 'p', choices: ['a', 'b', 'c', 'd'], correctIndex: 0, timeLimitSec: 10 },
+  ]);
+  assertEq(g.announcementMode, false, 'announcementMode: defaults to false');
+
+  const r1 = g.setAnnouncementMode(true);
+  assertEq(r1, { ok: true, announcementMode: true }, 'setAnnouncementMode: ok in LOBBY');
+  assertEq(g.announcementMode, true, 'announcementMode: flag persists after set');
+
+  // Start the game \u2014 should now be locked.
+  g.players.set('p1', { id: 'p1', name: 'A', score: 0, answers: [], connected: true, socketId: 's1' });
+  g.start();
+  const r2 = g.setAnnouncementMode(false);
+  assertEq(r2, { ok: false, reason: 'quiz-started' }, 'setAnnouncementMode: rejected once quiz started');
+  assertEq(g.announcementMode, true, 'announcementMode: value unchanged after rejected set');
+
+  g._clearTimers();
+}
+
+{
+  // With announcementMode ON, `_enterPrompt` must NOT arm a phase timer
+  // \u2014 the PROMPT phase should sit indefinitely until startAnsweringNow().
+  const g = new Game([
+    { id: 'q1', prompt: 'p', choices: ['a', 'b', 'c', 'd'], correctIndex: 0, timeLimitSec: 10 },
+  ]);
+  g.announcementMode = true;
+  g._enterPrompt(0);
+  assertEq(g.phase, 'PROMPT', 'announcementMode: _enterPrompt lands in PROMPT');
+  assertEq(g._phaseTimer, null, 'announcementMode: _enterPrompt does NOT arm an auto-advance timer');
+  g._clearTimers();
+}
+
+{
+  // Default (announcementMode OFF) regression: `_enterPrompt` MUST still
+  // arm the auto-advance timer the way it always has.
+  const g = new Game([
+    { id: 'q1', prompt: 'p', choices: ['a', 'b', 'c', 'd'], correctIndex: 0, timeLimitSec: 10 },
+  ]);
+  g._enterPrompt(0);
+  assertEq(g.phase, 'PROMPT', 'default: _enterPrompt lands in PROMPT');
+  if (g._phaseTimer === null) {
+    console.error('FAIL: default: _enterPrompt arms _phaseTimer for auto-advance');
+    failures++;
+  } else {
+    console.log('ok: default: _enterPrompt arms _phaseTimer for auto-advance');
+  }
+  g._clearTimers();
+}
+
+{
+  // startAnsweringNow only valid in PROMPT + announcementMode.
+  const g = new Game([
+    { id: 'q1', prompt: 'p', choices: ['a', 'b', 'c', 'd'], correctIndex: 0, timeLimitSec: 10 },
+  ]);
+
+  // Off + LOBBY \u2014 reject (not in announcement mode).
+  assertEq(
+    g.startAnsweringNow(),
+    { ok: false, reason: 'not-announcement-mode' },
+    'startAnsweringNow: rejected when announcementMode off'
+  );
+
+  // On + LOBBY \u2014 still wrong phase.
+  g.announcementMode = true;
+  assertEq(
+    g.startAnsweringNow(),
+    { ok: false, reason: 'wrong-phase' },
+    'startAnsweringNow: rejected outside PROMPT phase'
+  );
+
+  // On + PROMPT \u2014 transitions to QUESTION.
+  g._enterPrompt(0);
+  const r = g.startAnsweringNow();
+  assertEq(r, { ok: true, phase: 'QUESTION' }, 'startAnsweringNow: transitions PROMPT -> QUESTION');
+  assertEq(g.phase, 'QUESTION', 'startAnsweringNow: phase is QUESTION');
+  // The question timer should now be armed (this is the answering timer,
+  // NOT the prompt auto-advance timer that announcement mode suppresses).
+  if (g._questionTimer === null) {
+    console.error('FAIL: startAnsweringNow: arms the question (answering) timer');
+    failures++;
+  } else {
+    console.log('ok: startAnsweringNow: arms the question (answering) timer');
+  }
+
+  // Idempotent: a second call (now in QUESTION, not PROMPT) is rejected.
+  assertEq(
+    g.startAnsweringNow(),
+    { ok: false, reason: 'wrong-phase' },
+    'startAnsweringNow: second call in QUESTION rejected'
+  );
+
+  g._clearTimers();
+}
+
+{
+  // reset() does NOT clear announcementMode \u2014 host may want to re-run
+  // the quiz at the same venue without re-toggling.
+  const g = new Game([]);
+  g.announcementMode = true;
+  g.reset();
+  assertEq(g.announcementMode, true, 'reset: announcementMode preserved across reset');
+}
+
 if (failures > 0) {
   console.error(`\n${failures} test(s) failed`);
   process.exit(1);

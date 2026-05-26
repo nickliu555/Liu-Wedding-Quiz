@@ -20,6 +20,16 @@
   let countdownInterval = null;
   let lastResult = null; // for display between reveal states
 
+  // Announcement Mode flag mirrored from the host. When ON, the wedding DJ
+  // is reading questions/choices aloud and the player screen swaps the
+  // "Look up at the big screen" copy for "listen to the DJ" copy. The flag
+  // is locked in on the host before the quiz starts (server rejects toggles
+  // outside LOBBY) so for a player's lifetime it's set at reconnect and
+  // doesn't change again — but we still subscribe to state:announcementMode
+  // in case a player joins/refreshes while still in LOBBY and the host
+  // toggles it before clicking Start.
+  let announcementMode = false;
+
   // ---------------- Rendering ----------------
   function render(html) {
     elView.innerHTML = '<div class="state-card">' + html + '</div>';
@@ -94,7 +104,10 @@
   // ---------------- Prompt (read-the-question lead-in) ----------------
   // Shown for ~3s before the answer choices appear. We deliberately do NOT
   // surface the question text on the player's phone — we want everyone
-  // looking up at the big screen during this beat.
+  // looking up at the big screen during this beat. In Announcement Mode
+  // the DJ reads the question + 4 choices aloud, so we swap the copy to
+  // direct the player's attention to the DJ instead (the room may not
+  // have a visible host screen).
   function renderPrompt(p) {
     stopCountdown();
     stopIntroTimer();
@@ -102,6 +115,16 @@
     answeredQuestionId = null;
     if (p && typeof p.serverNow === 'number') {
       clockOffset = p.serverNow - Date.now();
+    }
+    if (announcementMode) {
+      elView.innerHTML =
+        '<div class="state-card prompt-card">' +
+          '<div class="intro-hint">Question ' + (p.index + 1) + ' of ' + p.total + '</div>' +
+          '<h2 class="serif">Listen up! 🎤</h2>' +
+          '<p>The DJ is reading the next question.</p>' +
+          '<p style="margin-top:10px; color: var(--muted); font-size: 14px;">Choices appear in a moment…</p>' +
+        '</div>';
+      return;
     }
     elView.innerHTML =
       '<div class="state-card prompt-card">' +
@@ -117,6 +140,50 @@
   const CHOICE_LETTERS = ['A', 'B', 'C', 'D'];
   function shape(i) { return '<span class="choice-letter">' + (CHOICE_LETTERS[i] || '') + '</span>'; }
 
+  // Minimal HTML escape used when interpolating author-supplied content
+  // (question choice text in the Announcement Mode row tiles) into
+  // innerHTML. Question content is author-controlled today, but escaping
+  // is cheap and future-proofs against any later editing surface.
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Shrink-to-fit: starting at maxPx, step font size down by 1px until the
+  // text fits inside its container both horizontally AND vertically, with a
+  // minPx floor so it never becomes unreadable. Used by Announcement Mode's
+  // row tiles, where the row height is fixed (no overflow allowed, no
+  // growth allowed). Cap at ~14 iterations to bound the worst case; in
+  // practice 0–7 are needed for our author-length answers.
+  function fitText(el, minPx, maxPx) {
+    if (!el) return;
+    let size = maxPx;
+    el.style.fontSize = size + 'px';
+    // Use a small tolerance (1px) to forgive sub-pixel rounding so we don't
+    // shrink unnecessarily on the threshold.
+    for (let i = 0; i < (maxPx - minPx); i++) {
+      if (el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1) break;
+      size -= 1;
+      if (size <= minPx) { size = minPx; el.style.fontSize = size + 'px'; break; }
+      el.style.fontSize = size + 'px';
+    }
+  }
+
+  // Re-run fitText on every Announcement-Mode row tile currently in the
+  // DOM. The query is cheap and only does real work when row tiles exist
+  // (default mode renders none of them, so the loop is a no-op).
+  function fitAllRowTexts() {
+    document.querySelectorAll('.row-text').forEach(function (el) { fitText(el, 11, 18); });
+  }
+  // One-shot resize listener — cheap (4 elements max) and only does real
+  // work when row tiles exist in the DOM (in non-Announcement Mode the
+  // querySelector returns nothing and the loop is a no-op).
+  window.addEventListener('resize', fitAllRowTexts);
+
   // Server clock sync: the server includes its own `Date.now()` on every
   // question payload. We compute an offset so our countdown is anchored to
   // the server's clock — keeps the player and host phones in sync regardless
@@ -129,22 +196,52 @@
     answeredQuestionId = null;
     if (typeof q.serverNow === 'number') clockOffset = q.serverNow - Date.now();
     const timeLeft = Math.max(0, Math.ceil((q.endsAt - serverNow()) / 1000));
+    // Announcement Mode: the room may not see the host screen at all, so
+    // the player phone has to be self-contained for choice text. Swap the
+    // 2×2 colored letter-only grid for 4 full-width stacked rows; each row
+    // is a fixed-height button with a colored letter badge on the left and
+    // the answer text on the right. Text auto-shrinks via fitText() to fit
+    // the row's text area — never overflows, never grows the row. Default
+    // (Announcement OFF) keeps the original byte-identical 2×2 tiles.
+    const tilesMarkup = announcementMode
+      ? ('<div class="tiles tiles-rows" id="pTiles">' +
+          [0,1,2,3].map(function (i) {
+            const txt = (q.choices && q.choices[i] != null) ? q.choices[i] : '';
+            // tile-color-N is added to BOTH the row and the badge: badge
+            // gets the solid saturated color, row gets a soft tint via the
+            // higher-specificity `.row-tile.tile-color-N` rule in player.css
+            // (which beats the single-class base.css rule painting the
+            // badge solid).
+            return '<button class="row-tile tile-color-' + i + '" data-choice="' + i + '" aria-label="Choice ' + CHOICE_LETTERS[i] + ': ' + escapeHtml(txt) + '">' +
+              '<span class="row-badge tile-color-' + i + '">' + shape(i) + '</span>' +
+              '<span class="row-text">' + escapeHtml(txt) + '</span>' +
+            '</button>';
+          }).join('') +
+        '</div>')
+      : ('<div class="tiles" id="pTiles">' +
+          [0,1,2,3].map(function (i) {
+            return '<button class="tile tile-color-' + i + '" data-choice="' + i + '" aria-label="Choice ' + (i+1) + '">' + shape(i) + '</button>';
+          }).join('') +
+        '</div>');
     elView.innerHTML =
       '<div class="state-card">' +
         '<div class="countdown-pill" id="pcountdown">' + timeLeft + 's</div>' +
         '<div class="urgent-bar" id="urgentBar" aria-hidden="true"></div>' +
         '<h2 class="serif">Make your pick</h2>' +
         '<p style="color: var(--muted);">Question ' + (q.index + 1) + ' of ' + q.total + '</p>' +
-        '<div class="tiles" id="pTiles">' +
-          [0,1,2,3].map(function (i) {
-            return '<button class="tile tile-color-' + i + '" data-choice="' + i + '" aria-label="Choice ' + (i+1) + '">' + shape(i) + '</button>';
-          }).join('') +
-        '</div>' +
+        tilesMarkup +
       '</div>';
+
+    // After the rows are in the DOM, shrink any text that would overflow.
+    // No-op for default mode (no .row-text elements present).
+    if (announcementMode) fitAllRowTexts();
 
     const tilesEl = document.getElementById('pTiles');
     tilesEl.addEventListener('click', function (e) {
-      const btn = e.target.closest('.tile');
+      // Match both default `.tile` and Announcement Mode `.row-tile` via
+      // their shared `data-choice` attribute, so the same handler covers
+      // both layouts without branching.
+      const btn = e.target.closest('[data-choice]');
       if (!btn) return;
       const choice = parseInt(btn.dataset.choice, 10);
       submitAnswer(choice);
@@ -178,9 +275,14 @@
           ? '<div class="result-points ' + klass + '">+' + pts + '</div>'
           : '<p>No answer recorded.</p>') +
         // Hide the rank on the very last question — the host's podium reveal
-        // is about to drop and we don't want to spoil the standings.
+        // is about to drop and we don't want to spoil the standings. In
+        // Announcement Mode the host doesn't auto-reveal (the operator has
+        // to click "Reveal results to phones →"), and the room may not see
+        // the host screen at all, so we point the player at the DJ instead.
         (res.isLastQuestion
-          ? '<p class="result-rank">Final results coming up on the big screen…</p>'
+          ? (announcementMode
+              ? '<p class="result-rank">Final results coming up — listen to the DJ! 🎤</p>'
+              : '<p class="result-rank">Final results coming up on the big screen…</p>')
           : '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>') +
       '</div>';
   }
@@ -570,10 +672,14 @@
       elName.textContent = res.player.name;
       setScore(res.player.score || 0);
       reactionsMutedByHost = !!res.reactionsMuted;
-      // Player is confirmed — reveal the reaction bar. It will remain
-      // visible for the rest of the session (disabled vs enabled depends
-      // on the current phase via setReactionsAllowed).
-      if (reactionBar) reactionBar.hidden = false;
+      announcementMode = !!res.announcementMode;
+      // Player is confirmed — reveal the reaction bar UNLESS Announcement
+      // Mode is on. The whole point of the reaction bar is to fan emojis
+      // up the host screen for the room to see; in Announcement Mode the
+      // room can't see the host screen (the DJ is calling the shots), so
+      // the bar is hidden entirely for the rest of the session. The flag
+      // is locked outside LOBBY so it won't flip once the player is in.
+      if (reactionBar) reactionBar.hidden = !!announcementMode;
       updateReactionButtonState();
       if (res.phase === 'LOBBY') { setReactionsAllowed(true); renderLobbyWaiting(); }
       else if (res.phase === 'INTRO') {
@@ -642,6 +748,20 @@
   socket.on('state:reactionsMuted', function (p) {
     reactionsMutedByHost = !!(p && p.muted);
     updateReactionButtonState();
+  });
+
+  // Host toggled Announcement Mode. The host server only allows this in the
+  // LOBBY phase, so by the time the player is in any later phase this flag
+  // is effectively frozen — but we still rebind it here so a player who
+  // joined mid-lobby picks up the latest setting before INTRO fires. We
+  // also hide/show the reaction bar to match: reactions only make sense
+  // when the room can see the host screen, which is not the case in
+  // Announcement Mode (DJ-led, possibly no visible host display).
+  socket.on('state:announcementMode', function (p) {
+    announcementMode = !!(p && p.on);
+    if (reactionBar && !rejected) {
+      reactionBar.hidden = announcementMode;
+    }
   });
 
   socket.on('state:question', function (q) {

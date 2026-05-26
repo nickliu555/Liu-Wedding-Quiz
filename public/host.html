@@ -13,8 +13,13 @@
 <body class="host">
   <div class="host-shell">
     <div class="host-topbar">
-      <div class="brand">Carly <span class="amp">&</span> Nick · Wedding Quiz</div>
-      <div class="controls">
+      <div class="brand">Carly <span class="amp">&</span> Nick · Wedding Quiz</div>      <!-- Announcement Mode indicator. Hidden by default; revealed (via the
+           `hidden` attribute) when the host toggles Announcement Mode on
+           in the lobby. Persists across all phases so the operator can see
+           at a glance which mode they're in. -->
+      <div id="announcementBadge" class="announcement-badge" hidden>
+        <span aria-hidden="true">🎤</span> Announcement mode
+      </div>      <div class="controls">
         <div class="settings-wrapper">
           <button id="settingsBtn" class="btn-ghost" type="button"
                   aria-controls="settingsPanel" aria-expanded="false"
@@ -63,7 +68,26 @@
             </div>
             <div class="player-list" id="playerList"></div>
             <div class="lobby-actions">
-              <button id="startBtn" class="btn-accent">Start the quiz</button>
+              <!-- 3-column grid: [toggle] [centered start button] [spacer].
+                   The spacer mirrors the toggle column so the Start button
+                   stays visually centered regardless of toggle width. -->
+              <div class="lobby-actions-row">
+                <div class="announcement-toggle-wrap">
+                  <button id="announcementToggle" class="announcement-toggle" type="button"
+                          role="switch" aria-checked="false"
+                          aria-label="Announcement mode"
+                          title="DJ reads questions aloud instead of the audience reading the host screen">
+                    <span class="announcement-toggle-track" aria-hidden="true">
+                      <span class="announcement-toggle-thumb"></span>
+                    </span>
+                    <span class="announcement-toggle-label">
+                      <span aria-hidden="true">🎤</span>
+                    </span>
+                  </button>
+                </div>
+                <button id="startBtn" class="btn-accent">Start the quiz</button>
+                <div class="announcement-toggle-spacer" aria-hidden="true"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -89,6 +113,13 @@
           <div class="answer-grid" id="answerGrid"></div>
           <div class="answers-received">
             <span id="answersReceived">0</span> / <span id="answersTotal">0</span> answered
+          </div>
+          <!-- Announcement Mode only: shown during PROMPT phase so the host
+               (or MC at the laptop) can release the answering window once the
+               DJ finishes reading the question + choices aloud. Default-OFF
+               mode never shows this button. -->
+          <div class="announcement-start-row" id="startAnsweringRow" hidden>
+            <button id="startAnsweringBtn" class="btn-primary" type="button">Start answering →</button>
           </div>
         </div>
       </section>
@@ -121,6 +152,12 @@
           <div class="results-intro" id="resultsIntro">Now for the results…</div>
           <div class="podium" id="podium"></div>
           <div class="full-lb" id="fullLb"></div>
+          <!-- Announcement Mode only: the host doesn't auto-reveal rank cards
+               to phones; the operator clicks this once the DJ has finished
+               calling out winners aloud. Hidden in default mode. -->
+          <div class="announcement-reveal-row" id="revealToPhonesRow" hidden>
+            <button id="revealToPhonesBtn" class="btn-primary" type="button">Reveal results to phones →</button>
+          </div>
         </div>
       </section>
     </div>

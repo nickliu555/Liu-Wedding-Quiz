@@ -145,6 +145,12 @@
   const musicBtn = document.getElementById('musicBtn');
   const muteReactionsBtn = document.getElementById('muteReactionsBtn');
   const resetBtn = document.getElementById('resetBtn');
+  const announcementToggle = document.getElementById('announcementToggle');
+  const announcementBadge = document.getElementById('announcementBadge');
+  const startAnsweringBtn = document.getElementById('startAnsweringBtn');
+  const startAnsweringRow = document.getElementById('startAnsweringRow');
+  const revealToPhonesBtn = document.getElementById('revealToPhonesBtn');
+  const revealToPhonesRow = document.getElementById('revealToPhonesRow');
 
   const sfxLobby = document.getElementById('sfx-lobby');
   const sfxTick = document.getElementById('sfx-tick');
@@ -169,7 +175,13 @@
       a.volume = 0; a.play().then(function () { a.pause(); a.currentTime = 0; a.volume = 1; }).catch(function () {});
     });
   }
-  function safePlay(a) { try { a.currentTime = 0; a.play().catch(function(){}); } catch(e){} }
+  function safePlay(a) {
+    // Announcement Mode silences ALL host audio — see the docs on
+    // `announcementMode` above. The mode is toggled lobby-only, so once
+    // set it stays for the whole quiz.
+    if (announcementMode) return;
+    try { a.currentTime = 0; a.play().catch(function(){}); } catch(e){}
+  }
 
   // ---------------- Wake Lock (keep the PC awake while host page is open) ----------------
   // Uses the Screen Wake Lock API. Supported in Chrome/Edge/Safari 16.4+.
@@ -275,6 +287,142 @@
     updateMuteReactionsBtn();
   });
 
+  // ---------------- Announcement Mode ----------------
+  // DJ-led fallback for venues where the host screen isn't visible to the
+  // audience. When ON:
+  //   - PROMPT phase does NOT auto-advance — host clicks "Start answering
+  //     →" to begin the answering timer (see Phase 3 wiring in renderPrompt).
+  //   - The fade-in PROMPT animation is skipped; full Q + 4 choices show
+  //     immediately for the DJ to read.
+  //   - ALL host audio is muted (lobby loop pauses immediately; SFX/cheer/
+  //     drumroll calls are no-ops). The DJ owns the audio in this mode.
+  //   - FINAL podium reveal renders instantly with a manual "Reveal
+  //     results to phones →" button (Phase 5).
+  // Only mutable in LOBBY — server enforces this; client disables the
+  // toggle UI mid-quiz so the operator can't try.
+  let announcementMode = false;
+  function updateAnnouncementUI() {
+    if (announcementToggle) {
+      announcementToggle.setAttribute('aria-checked', announcementMode ? 'true' : 'false');
+    }
+    if (announcementBadge) {
+      announcementBadge.hidden = !announcementMode;
+    }
+    // When the mode flips on, immediately silence anything currently
+    // playing so the DJ owns the room from this point forward. The audio
+    // play helpers below also early-return while the mode is on, so future
+    // attempts to play SFX during the quiz are no-ops.
+    if (announcementMode) {
+      try { sfxLobby.pause(); sfxLobby.currentTime = 0; } catch (_) {}
+      try { sfxTick.pause(); sfxTick.currentTime = 0; } catch (_) {}
+      try { sfxReveal.pause(); sfxReveal.currentTime = 0; } catch (_) {}
+      try { sfxPodium.pause(); sfxPodium.currentTime = 0; } catch (_) {}
+      try { applauseAudio.pause(); applauseAudio.currentTime = 0; } catch (_) {}
+      try { drumrollAudio.pause(); drumrollAudio.currentTime = 0; } catch (_) {}
+    }
+  }
+  // The toggle is only operable while we're in LOBBY (server rejects
+  // changes mid-quiz). Call this whenever the phase changes so the
+  // disabled state reflects reality.
+  function setAnnouncementToggleEnabled(enabled) {
+    if (!announcementToggle) return;
+    if (enabled) {
+      announcementToggle.disabled = false;
+      announcementToggle.removeAttribute('aria-disabled');
+      announcementToggle.title = 'DJ reads questions aloud instead of the audience reading the host screen';
+    } else {
+      announcementToggle.disabled = true;
+      announcementToggle.setAttribute('aria-disabled', 'true');
+      announcementToggle.title = 'Announcement mode is locked once the quiz starts';
+    }
+  }
+  updateAnnouncementUI();
+  if (announcementToggle) {
+    announcementToggle.addEventListener('click', function () {
+      if (announcementToggle.disabled) return;
+      const next = !announcementMode;
+      // Optimistic UI: flip immediately so the click feels responsive.
+      // Reverted in the ack handler if the server rejects (e.g. quiz
+      // already started in another host tab between render and click).
+      announcementMode = next;
+      updateAnnouncementUI();
+      socket.emit('host:setAnnouncementMode', { on: next }, function (res) {
+        if (!res || !res.ok) {
+          // Revert to the server's truth.
+          announcementMode = !!(res && res.announcementMode);
+          updateAnnouncementUI();
+          if (res && res.reason === 'quiz-started') {
+            showToast('Announcement mode can only be changed in the lobby.');
+          }
+        } else {
+          announcementMode = !!res.announcementMode;
+          updateAnnouncementUI();
+        }
+      });
+    });
+  }
+  // Keep the toggle and badge in sync if another host page (or the server)
+  // changes the mode.
+  socket.on('state:announcementMode', function (p) {
+    announcementMode = !!(p && p.on);
+    updateAnnouncementUI();
+  });
+
+  // "Start answering →" button — only visible during Announcement Mode's
+  // PROMPT phase (see renderPrompt). Fires host:startAnswering, which on
+  // the server calls game.startAnsweringNow() to transition PROMPT ->
+  // QUESTION immediately (the auto _phaseTimer was suppressed in PROMPT).
+  // On success the server broadcasts state:question and renderQuestion
+  // does the snap-instant swap to the running-timer state.
+  if (startAnsweringBtn) {
+    startAnsweringBtn.addEventListener('click', function () {
+      if (startAnsweringBtn.disabled) return;
+      // Optimistic disable: prevent double-clicks while the server processes.
+      // renderQuestion (fired from the resulting state:question broadcast)
+      // hides the row entirely. If the server rejects we re-enable below.
+      startAnsweringBtn.disabled = true;
+      startAnsweringBtn.setAttribute('aria-busy', 'true');
+      socket.emit('host:startAnswering', {}, function (res) {
+        if (!res || !res.ok) {
+          // Most common rejection reasons:
+          //   - 'wrong-phase': operator double-clicked or the phase
+          //     advanced between the click and the emit.
+          //   - 'not-announcement-mode': someone toggled the flag off
+          //     between renderPrompt and the click (shouldn't happen
+          //     since the toggle is locked outside LOBBY, but defensive).
+          startAnsweringBtn.disabled = false;
+          startAnsweringBtn.removeAttribute('aria-busy');
+          showToast('Could not start answering — try again.');
+        }
+        // On success the server broadcasts state:question which calls
+        // renderQuestion, which hides #startAnsweringRow. No work needed
+        // here in the success branch.
+      });
+    });
+  }
+
+  // "Reveal results to phones →" button — only visible in Announcement
+  // Mode's FINAL phase (see renderFinalAnnouncement). Fires host:podiumDone
+  // which the server treats as the "podium reveal complete" signal — it
+  // sets podiumRevealed = true and broadcasts state:rankReveal so every
+  // player phone flips from the "Final results coming up…" holding card
+  // to its personal rank card in unison. Server is idempotent on dupes,
+  // but we disable the button after the first click to make the UX clear.
+  if (revealToPhonesBtn) {
+    revealToPhonesBtn.addEventListener('click', function () {
+      if (revealToPhonesBtn.disabled) return;
+      revealToPhonesBtn.disabled = true;
+      revealToPhonesBtn.setAttribute('aria-busy', 'true');
+      socket.emit('host:podiumDone');
+      // No ack from the server for host:podiumDone (it's a fire-and-forget
+      // signal; the server broadcasts state:rankReveal as the visible
+      // confirmation). Visually settle the button into a "done" state so
+      // the operator sees their click was received.
+      revealToPhonesBtn.removeAttribute('aria-busy');
+      revealToPhonesBtn.textContent = '✓ Results revealed to phones';
+    });
+  }
+
   // ---------------- Auto-enter on load ----------------
   socket.on('connect', function () {
     socket.emit('host:auth', {}, function (res) {
@@ -284,6 +432,12 @@
       rTotal.textContent = res.questionsTotal;
       reactionsMuted = !!res.reactionsMuted;
       updateMuteReactionsBtn();
+      // Hydrate announcement mode from the server ack so a refreshed host
+      // page picks up the current truth (badge, toggle position, audio
+      // gating) immediately — not after the next state:* broadcast.
+      announcementMode = !!res.announcementMode;
+      updateAnnouncementUI();
+      setAnnouncementToggleEnabled(res.phase === 'LOBBY');
       if (res.phase === 'LOBBY') {
         enterLobby(res);
       }
@@ -295,6 +449,13 @@
 
   function enterLobby(initial) {
     show('lobby');
+    // Defensive cleanup of phase-only UI (announcement-mode "Start
+    // answering →" button, prompt-only / announcement-prompt body classes)
+    // so a refresh into the lobby is clean even if a previous quiz left
+    // stale state attached.
+    if (startAnsweringRow) startAnsweringRow.hidden = true;
+    if (revealToPhonesRow) revealToPhonesRow.hidden = true;
+    document.body.classList.remove('host-prompt-only', 'host-announcement-prompt', 'host-prompt-instant');
     qTotal.textContent = initial.questionsTotal;
     rTotal.textContent = initial.questionsTotal;
     renderQR();
@@ -495,7 +656,7 @@
   // alarm. The 5..1 ticks are short, clean 880Hz beeps that get louder each
   // second; the 0s tick is a longer higher 1320Hz "BEEEEP" alarm.
   function playTick(secLeft) {
-    if (!soundOn) return;
+    if (!soundOn || announcementMode) return;
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state !== 'running') {
@@ -535,7 +696,7 @@
   applauseAudio.addEventListener('error', function () { applauseFileAvailable = false; });
 
   function playApplause(durationSec) {
-    if (!soundOn) return;
+    if (!soundOn || announcementMode) return;
     // Prefer the real recording if present.
     if (applauseFileAvailable === true) {
       try {
@@ -604,7 +765,7 @@
   // A short triumphant chord ("ding!") played when each podium spot is revealed.
   // tier: 3 = 3rd place (low chord), 2 = 2nd place (mid), 1 = 1st place (high & longer).
   function playCheerChord(tier) {
-    if (!soundOn) return;
+    if (!soundOn || announcementMode) return;
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state !== 'running') {
@@ -658,7 +819,7 @@
 
   function playDrumroll(durationSec) {
     var dur = Math.max(0.4, durationSec || 1.2);
-    if (!soundOn) return function () {};
+    if (!soundOn || announcementMode) return function () {};
     // Prefer the real recording if it's loaded enough to play. We check
     // `readyState >= 2` (HAVE_CURRENT_DATA) at call time as a fallback, in
     // case neither `loadeddata` nor `canplaythrough` fired yet.
@@ -738,7 +899,7 @@
 
   // Game-show "let's begin" stinger: 3-note rising fanfare (C5 -> E5 -> G5)
   // played in quick succession when the host starts the game.
-  function playStartFanfare() {    if (!soundOn) return;
+  function playStartFanfare() {    if (!soundOn || announcementMode) return;
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state !== 'running') {
@@ -828,7 +989,7 @@
   // sounds like it's playing twice or the notes feel too far apart,
   // that's the symptom of state:reveal being double-emitted again.
   function playRevealChime() {
-    if (!soundOn) return;
+    if (!soundOn || announcementMode) return;
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state !== 'running') {
@@ -864,8 +1025,20 @@
   function renderQuestion(q) {
     currentQ = q;
     lastTickSec = null;
-    const wasPromptOnly = document.body.classList.contains('host-prompt-only');
+    // In Announcement Mode the PROMPT phase already rendered the question
+    // text and the 4 answer tiles fully visible (no host-prompt-only
+    // class). We treat that as "already populated" so we don't re-render
+    // the tiles (which would cause them to pop) and so the swap to the
+    // running-timer state is an instant in-place update.
+    const wasAnnouncementPrompt = document.body.classList.contains('host-announcement-prompt');
+    const wasPromptOnly =
+      document.body.classList.contains('host-prompt-only') || wasAnnouncementPrompt;
     show('question');
+    // Hide the "Start answering →" button on entry into QUESTION — even if
+    // we got here via a host refresh that skipped PROMPT, the button must
+    // not be visible while the countdown is running.
+    if (startAnsweringRow) startAnsweringRow.hidden = true;
+    if (startAnsweringBtn) startAnsweringBtn.disabled = false;
     // If we were in prompt-only mode, the answer tiles have already been
     // pre-rendered by renderPrompt() and are sitting hidden in the DOM.
     // We just need to remove the class to let the CSS transitions fade
@@ -900,7 +1073,15 @@
     answersReceived.textContent = '0';
     // answersTotal is updated via host:answerCount event
 
-    if (wasPromptOnly) {
+    if (wasAnnouncementPrompt) {
+      // Snap-instant swap: tiles are already visible (no transition needed),
+      // and we just need to reveal the timer ring + answers counter and
+      // start the countdown. Removing the class on the same frame is fine
+      // because we don't want a fade — the DJ has just said "go" and the
+      // timer should appear immediately.
+      document.body.classList.remove('host-announcement-prompt');
+      startQTimer(q);
+    } else if (wasPromptOnly) {
       // Drop the prompt-only class on the next frame so the browser has a
       // chance to commit the current (hidden) state before transitioning.
       requestAnimationFrame(function () {
@@ -936,7 +1117,7 @@
     tick();
     introTimer = setInterval(tick, 200);
     // A short rising fanfare to cue the room that things are starting.
-    if (soundOn) playStartFanfare();
+    if (soundOn && !announcementMode) playStartFanfare();
   }
 
   // ---------------- Prompt (read-the-question lead-in) ----------------
@@ -947,6 +1128,59 @@
     stopQTimer();
     stopIntroTimer();
     show('question');
+    // Announcement Mode short-circuits the visual "lead-in" we use in
+    // default mode: instead of hiding the choices until the QUESTION phase
+    // fires, we render the full question + 4 answer tiles immediately so
+    // the wedding DJ can read them aloud at their own pace. The timer
+    // ring is also hidden until the operator clicks "Start answering →"
+    // (which fires host:startAnswering -> the server transitions
+    // PROMPT -> QUESTION and broadcasts state:question with a fresh
+    // endsAt clock). The default-OFF branch below is byte-identical to
+    // the original implementation.
+    if (announcementMode) {
+      // No "💍 Final Question!" splash — the DJ owns the dramatic intro
+      // in Announcement Mode. Skip the sting entirely.
+      qIndex.textContent = (p.index + 1);
+      qTotal.textContent = p.total;
+      qPrompt.textContent = p.prompt;
+      if (p.image) { qImage.src = p.image; qImage.style.display = 'block'; }
+      else { qImage.style.display = 'none'; qImage.removeAttribute('src'); }
+      // Render the answer tiles FULLY VISIBLE — no host-prompt-only class.
+      if (Array.isArray(p.choices) && p.choices.length === 4) {
+        answerGrid.innerHTML = p.choices.map(function (c, i) {
+          return (
+            '<div class="answer-card tile-color-' + i + '" data-idx="' + i + '">' +
+              '<div class="shape">' + shapeHTML(i) + '</div>' +
+              '<div class="text">' + escapeHtml(c) + '</div>' +
+            '</div>'
+          );
+        }).join('');
+      } else {
+        answerGrid.innerHTML = '';
+      }
+      answersReceived.textContent = '0';
+      // Park the timer ring on the full time so the swap into QUESTION
+      // mode (when the operator clicks "Start answering →") doesn't briefly
+      // flash a stale value.
+      if (timerText && p.timeLimitSec) timerText.textContent = String(p.timeLimitSec);
+      if (timerRing) timerRing.style.setProperty('--pct', '100');
+      // Defensive: never carry forward the default-mode prompt-only class.
+      document.body.classList.remove('host-prompt-only', 'host-prompt-instant');
+      document.body.classList.add('host-announcement-prompt');
+      // Show the operator's "Start answering →" button + enable it (it may
+      // have been disabled by a previous click on the same prompt phase
+      // if e.g. the server rejected the emit and we returned to PROMPT).
+      if (startAnsweringRow) startAnsweringRow.hidden = false;
+      if (startAnsweringBtn) {
+        startAnsweringBtn.disabled = false;
+        startAnsweringBtn.removeAttribute('aria-busy');
+      }
+      if (p && typeof p.serverNow === 'number') {
+        clockOffset = p.serverNow - Date.now();
+      }
+      return;
+    }
+    // ---- Default mode (announcementMode === false) ----
     // For the very last question, briefly show a "💍 Final Question!" splash
     // before the prompt content becomes readable. The server has padded
     // this prompt phase with extra time so the regular cadence is preserved.
@@ -1068,7 +1302,10 @@
   function renderReveal(r) {
     stopQTimer();
     show('reveal');
-    if (soundOn) safePlay(sfxReveal);
+    // Defensive: make sure the announcement-mode PROMPT button never lingers
+    // into REVEAL (e.g. if all players answer instantly).
+    if (startAnsweringRow) startAnsweringRow.hidden = true;
+    if (soundOn && !announcementMode) safePlay(sfxReveal);
 
     // Pull prompt + choices from our in-memory currentQ (server doesn't resend them)
     const q = currentQ || { prompt: '', choices: ['', '', '', ''] };
@@ -1167,6 +1404,24 @@
   function renderFinal(f) {
     show('final');
 
+    // ---- Announcement Mode: instant render, manual reveal-to-phones ----
+    // In Announcement Mode the DJ does the dramatic call-out aloud, so we
+    // skip the "Now for the results…" hold, the per-tier suspense reveal,
+    // the drumroll, the cheer chords, the confetti pre-emption, and the
+    // score count-up. The full podium + leaderboard appear immediately,
+    // and the operator clicks "Reveal results to phones →" to fire
+    // host:podiumDone (which is what triggers state:rankReveal on the
+    // server, so player phones flip from "Final results coming up…" to
+    // their personal rank card).
+    if (announcementMode) {
+      renderFinalAnnouncement(f);
+      return;
+    }
+    // ---- Default mode (announcementMode === false): original flow ----
+    // The button row stays hidden; the auto host:podiumDone signal at the
+    // end of runPodiumReveal handles the player-phone reveal.
+    if (revealToPhonesRow) revealToPhonesRow.hidden = true;
+
     // Reset the "Congratulations" banner — it's revealed only after the
     // winner pops in (handled inside runPodiumReveal).
     var congratsEl = document.getElementById('finalCongrats');
@@ -1194,6 +1449,86 @@
         runPodiumReveal(f);
       }, 650);
     }, INTRO_MS);
+  }
+
+  // Announcement Mode FINAL render: instant, silent, no per-tier reveal.
+  // The DJ is calling out the winners aloud, so the entire room sees the
+  // full podium + leaderboard the moment FINAL fires. The operator then
+  // clicks "Reveal results to phones →" to fan the per-player rank cards
+  // out to phones (server emits state:rankReveal on receiving
+  // host:podiumDone). This deliberately does NOT play any audio, does NOT
+  // burst confetti, and does NOT auto-fire host:podiumDone.
+  function renderFinalAnnouncement(f) {
+    // Skip the "pre-reveal" overlay state entirely — no intro hold.
+    var finalView = document.querySelector('.final-view');
+    if (finalView) finalView.classList.remove('pre-reveal');
+    var intro = document.getElementById('resultsIntro');
+    if (intro) { intro.classList.remove('show'); intro.classList.add('hide'); }
+    // Congratulations banner: show immediately (no per-tier suspense to
+    // protect).
+    var congratsEl = document.getElementById('finalCongrats');
+    if (congratsEl) congratsEl.classList.add('visible');
+
+    // Build podium DOM in its final-revealed state. We reuse podiumCell()
+    // (which already returns the final HTML) and then add the `revealed`
+    // class so any CSS that only paints in the revealed state lights up
+    // without needing the per-tier animation timeline.
+    var groups = (f && f.podiumGroups) || [];
+    if (groups.length === 0 && f && f.podium && f.podium.length) {
+      groups = f.podium.map(function (e) {
+        return { rank: e.rank, score: e.score, players: [{ id: e.id, name: e.name }] };
+      });
+    }
+    var g1 = groups[0];
+    var g2 = groups[1];
+    var g3 = groups[2];
+    podium.innerHTML =
+      podiumCell('place-2', '🥈', g2) +
+      podiumCell('place-1', '🥇', g1) +
+      podiumCell('place-3', '🥉', g3);
+    // Mark every populated step as `visible revealed` so it appears in
+    // its final state without the suspense overlay or the slide-in.
+    Array.from(podium.querySelectorAll('.podium-step')).forEach(function (el) {
+      if (el.classList.contains('empty-slot')) return;
+      el.classList.add('visible', 'revealed');
+      // Also flag the inner name(s) as revealed so any name-level CSS
+      // transition paints them in the final state.
+      var nameEls = el.querySelectorAll('.names-list .name');
+      nameEls.forEach(function (n) { n.classList.add('revealed'); });
+    });
+
+    // Full leaderboard: render and mark visible immediately.
+    fullLb.innerHTML =
+      '<h3 class="serif" style="margin-top:0;">Full scores</h3>' +
+      (f.fullLeaderboard || []).map(function (e) {
+        return (
+          '<div class="lb-row">' +
+            '<div class="rank">' + e.rank + '</div>' +
+            '<div class="name">' + escapeHtml(e.name) + '</div>' +
+            '<div class="score">' + e.score + '</div>' +
+          '</div>'
+        );
+      }).join('');
+    fullLb.classList.add('visible');
+
+    // Show the operator's reveal-to-phones button. Reset its disabled
+    // state in case this is a re-render (e.g. host refresh after FINAL).
+    if (revealToPhonesRow) revealToPhonesRow.hidden = false;
+    if (revealToPhonesBtn) {
+      // If the server has already received host:podiumDone (e.g. a previous
+      // host tab already clicked the button before this one refreshed),
+      // f.podiumRevealed will be true. Disable the button + relabel so the
+      // operator doesn't try to fire it again. The server is idempotent
+      // (it ignores duplicate signals) but the UX is clearer this way.
+      if (f && f.podiumRevealed) {
+        revealToPhonesBtn.disabled = true;
+        revealToPhonesBtn.textContent = '✓ Results revealed to phones';
+      } else {
+        revealToPhonesBtn.disabled = false;
+        revealToPhonesBtn.removeAttribute('aria-busy');
+        revealToPhonesBtn.textContent = 'Reveal results to phones →';
+      }
+    }
   }
 
   function runPodiumReveal(f) {
@@ -1417,9 +1752,21 @@
   socket.on('state:lobby', function (s) {
     renderLobby(s);
     answersTotal.textContent = s.total;
+    // LOBBY is the only phase in which the announcement-mode toggle is
+    // mutable; re-enable it on every LOBBY broadcast so a reset/refresh
+    // restores interactivity.
+    setAnnouncementToggleEnabled(true);
+    if (typeof s.announcementMode === 'boolean' && s.announcementMode !== announcementMode) {
+      announcementMode = s.announcementMode;
+      updateAnnouncementUI();
+    }
   });
-  socket.on('state:question', renderQuestion);
+  socket.on('state:question', function (q) {
+    setAnnouncementToggleEnabled(false);
+    renderQuestion(q);
+  });
   socket.on('state:reveal', function (r) {
+    setAnnouncementToggleEnabled(false);
     // Play a brief "sting" between QUESTION and REVEAL — matches Kahoot's
     // beat where you hear "Time's up!" (timeout) or "Let's see the
     // answers!" (everyone answered early). On host refresh the server
@@ -1447,9 +1794,18 @@
       renderReveal(r);
     }
   });
-  socket.on('state:final', renderFinal);
-  socket.on('state:intro', renderIntro);
-  socket.on('state:prompt', renderPrompt);
+  socket.on('state:final', function (f) {
+    setAnnouncementToggleEnabled(false);
+    renderFinal(f);
+  });
+  socket.on('state:intro', function (i) {
+    setAnnouncementToggleEnabled(false);
+    renderIntro(i);
+  });
+  socket.on('state:prompt', function (p) {
+    setAnnouncementToggleEnabled(false);
+    renderPrompt(p);
+  });
 
   // ---------------- Floating reactions from players ----------------
   // Players tap an emoji on their phone -> server -> we spawn a floating
@@ -1496,6 +1852,9 @@
         document.body.classList.remove('host-prompt-only');
         reactionsMuted = !!res.reactionsMuted;
         updateMuteReactionsBtn();
+        announcementMode = !!res.announcementMode;
+        updateAnnouncementUI();
+        setAnnouncementToggleEnabled(true);
         enterLobby(res);
       }
     });

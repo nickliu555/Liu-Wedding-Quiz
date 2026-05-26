@@ -108,6 +108,7 @@ function broadcastLobby() {
     players: game.getLobbyPlayers(),
     total: game.players.size,
     questionsTotal: questions.length,
+    announcementMode: game.announcementMode,
   });
 }
 
@@ -212,7 +213,7 @@ io.on('connection', (socket) => {
     role = 'player';
     playerId = pid;
     socket.join('players');
-    ack && ack({ ok: true, player: { id: res.player.id, name: res.player.name }, reactionsMuted });
+    ack && ack({ ok: true, player: { id: res.player.id, name: res.player.name }, reactionsMuted, announcementMode: game.announcementMode });
     broadcastLobby();
   });
 
@@ -228,6 +229,7 @@ io.on('connection', (socket) => {
       player: { id: res.player.id, name: res.player.name, score: res.player.score },
       phase: game.phase,
       reactionsMuted,
+      announcementMode: game.announcementMode,
     };
     if (game.phase === PHASES.INTRO) {
       payload.intro = game.getIntroPublic();
@@ -336,6 +338,7 @@ io.on('connection', (socket) => {
       questionsTotal: questions.length,
       currentIndex: game.currentIndex,
       reactionsMuted,
+      announcementMode: game.announcementMode,
     });
     // Replay current state so a refreshed host page resumes exactly where it was.
     if (game.phase === PHASES.INTRO) {
@@ -476,6 +479,38 @@ io.on('connection', (socket) => {
     // Broadcast to everyone (players gray out their bar; other host pages
     // sync their button state).
     io.emit('state:reactionsMuted', { muted: reactionsMuted });
+  });
+
+  // Announcement Mode toggle. Only honored while in LOBBY — the game
+  // method enforces this. The flag affects PROMPT phase timing on the
+  // server (no auto-advance) and a number of host/player rendering
+  // decisions on the client, so we broadcast `state:announcementMode`
+  // to keep every connected client in sync.
+  socket.on('host:setAnnouncementMode', ({ on } = {}, ack) => {
+    if (!requireHost(ack)) return;
+    const res = game.setAnnouncementMode(!!on);
+    if (!res.ok) {
+      // Echo the current truth so the host UI can revert its toggle.
+      return ack && ack({ ok: false, reason: res.reason, announcementMode: game.announcementMode });
+    }
+    ack && ack({ ok: true, announcementMode: game.announcementMode });
+    io.emit('state:announcementMode', { on: game.announcementMode });
+  });
+
+  // Announcement Mode: host clicks "Start answering →" after the DJ has
+  // finished reading the question + choices aloud. Advances PROMPT →
+  // QUESTION immediately (the auto-timer is intentionally NOT armed in
+  // this mode — see `Game._enterPrompt`). The game method is
+  // phase-guarded so a stray duplicate click is harmlessly rejected.
+  socket.on('host:startAnswering', (_p, ack) => {
+    if (!requireHost(ack)) return;
+    const res = game.startAnsweringNow();
+    if (!res.ok) return ack && ack(res);
+    // Mirror what the prompt-end timer callback would have done in the
+    // default flow: broadcast the question payload so clients flip into
+    // the answering view with the timer running.
+    broadcastQuestion();
+    ack && ack({ ok: true });
   });
 
   // ---- Disconnect ----

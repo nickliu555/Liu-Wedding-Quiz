@@ -56,6 +56,16 @@ class Game {
     // aren't spoiled before the room sees them on the big screen. Reset
     // to false on any new-game transition (intro start, reset).
     this.podiumRevealed = false;
+    // Announcement Mode: a DJ-led fallback for venues where the host
+    // screen isn't visible to the audience. When true:
+    //   - PROMPT phase does NOT auto-advance; it waits for the host to
+    //     click "Start answering →" (`host:startAnswering` socket event,
+    //     wired to `startAnsweringNow()` below).
+    //   - The host UI suppresses fade-in animations, audio cues, and
+    //     the podium reveal sequence (handled client-side).
+    // Only mutable while in LOBBY — once `start()` runs, the flag is
+    // locked for the duration of the quiz. See `setAnnouncementMode`.
+    this.announcementMode = false;
   }
 
   // ---------------- Lobby / players ----------------
@@ -215,10 +225,17 @@ class Game {
     const isLast = index === this.questions.length - 1;
     const duration = PROMPT_DURATION_MS + (isLast ? FINAL_PROMPT_EXTRA_MS : 0);
     this.currentEndsAt = this.currentStartTs + duration;
-    this._phaseTimer = setTimeout(() => {
-      this._phaseTimer = null;
-      this._endPrompt();
-    }, duration + 50);
+    // Announcement Mode: skip the auto-advance timer entirely. The PROMPT
+    // phase will stay active until the host clicks "Start answering →",
+    // which invokes `startAnsweringNow()` below. `currentEndsAt` is still
+    // populated (above) for symmetry, but no client uses it as an actual
+    // countdown in this mode — the host page hides the lead-in timer.
+    if (!this.announcementMode) {
+      this._phaseTimer = setTimeout(() => {
+        this._phaseTimer = null;
+        this._endPrompt();
+      }, duration + 50);
+    }
     return { ok: true, phase: PHASES.PROMPT };
   }
 
@@ -552,6 +569,28 @@ class Game {
     return n;
   }
 
+  // Toggle Announcement Mode. Only allowed in LOBBY — once the quiz has
+  // started we don't want the timer / render behavior to flip mid-flight.
+  setAnnouncementMode(value) {
+    if (this.phase !== PHASES.LOBBY) {
+      return { ok: false, reason: 'quiz-started' };
+    }
+    this.announcementMode = !!value;
+    return { ok: true, announcementMode: this.announcementMode };
+  }
+
+  // Host-controlled trigger that advances PROMPT → QUESTION when
+  // Announcement Mode is on (no auto-timer is running in that mode —
+  // see `_enterPrompt`). Mirrors what the `_phaseTimer` callback would
+  // have done in the default flow. Idempotent / phase-guarded so a
+  // double-click can't double-fire.
+  startAnsweringNow() {
+    if (!this.announcementMode) return { ok: false, reason: 'not-announcement-mode' };
+    if (this.phase !== PHASES.PROMPT) return { ok: false, reason: 'wrong-phase' };
+    this._endPrompt();
+    return { ok: true, phase: PHASES.QUESTION };
+  }
+
   reset() {
     this._clearTimers();
     this.phase = PHASES.LOBBY;
@@ -560,6 +599,10 @@ class Game {
     this.currentStartTs = 0;
     this.currentEndsAt = 0;
     this.podiumRevealed = false;
+    // Intentionally NOT clearing `announcementMode` here — the host
+    // operator may want to keep the mode setting across a reset (e.g.
+    // re-running the quiz at the same venue). It's lobby-toggleable
+    // anyway via `setAnnouncementMode`.
   }
 }
 

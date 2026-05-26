@@ -202,6 +202,94 @@ body.player.player-waiting .petal-layer { display: block; }
 .tile:active { transform: scale(0.96); }
 .tile:disabled { opacity: 0.35; }
 
+/* ---- Announcement Mode: Duolingo-style stacked rows -----------------
+   Only rendered when the host has Announcement Mode ON (player.js emits
+   the `.tiles-rows` modifier markup in that branch). Default mode keeps
+   the 2x2 `.tiles` grid above and is untouched by these rules.
+
+   The row is a FIXED-height button: text never overflows it and never
+   grows it. If author-supplied choice text is too long for the text area,
+   player.js's fitText() shrinks the font size until it fits (down to an
+   11px floor). The colored badge on the left preserves the same color +
+   letter visual language as the default mode tile and the host bars. */
+.tiles.tiles-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.row-tile {
+  display: flex;
+  align-items: center;
+  height: 64px;            /* fixed: no growth allowed */
+  padding: 0 14px 0 8px;
+  /* Transparent placeholder border so the layout reserves the 2px box up
+     front; the per-color rules below just swap border-color (no reflow
+     when the color class lands). */
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: var(--card, #fff);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  overflow: hidden;        /* belt-and-suspenders for the no-overflow guarantee */
+  transition: transform 0.08s ease, opacity 0.2s ease;
+  text-align: left;
+}
+/* Per-row soft tint of the choice color (~14% over white) PLUS a darker
+   border in the same color family (~30% black mix) for chunky Duolingo-
+   style color identity. The badge keeps the saturated color so the
+   tile-to-badge contrast still reads, while the row gains a visible
+   colored outline. Two-class selectors beat the single-class
+   `.tile-color-N` rules in base.css that would otherwise paint the row
+   solid (those still apply to `.row-badge` alone, which we want). */
+.row-tile.tile-color-0 {
+  background: color-mix(in srgb, var(--tile-1) 14%, white);
+  border-color: color-mix(in srgb, var(--tile-1) 70%, black);
+}
+.row-tile.tile-color-1 {
+  background: color-mix(in srgb, var(--tile-2) 14%, white);
+  border-color: color-mix(in srgb, var(--tile-2) 70%, black);
+}
+.row-tile.tile-color-2 {
+  background: color-mix(in srgb, var(--tile-3) 14%, white);
+  border-color: color-mix(in srgb, var(--tile-3) 70%, black);
+}
+.row-tile.tile-color-3 {
+  background: color-mix(in srgb, var(--tile-4) 14%, white);
+  border-color: color-mix(in srgb, var(--tile-4) 70%, black);
+}
+.row-tile:active   { transform: scale(0.98); }
+.row-tile:disabled { opacity: 0.35; }
+.row-badge {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: white;
+  /* Background color comes from the .tile-color-N class also applied. */
+}
+.row-badge .choice-letter {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+.row-text {
+  flex: 1 1 auto;
+  min-width: 0;            /* required so the flex child can shrink below its content width */
+  height: 100%;
+  padding: 0 8px 0 14px;
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.2;
+  /* font-size is set by fitText() at runtime (11px..18px). */
+  overflow: hidden;        /* fitText measures scrollWidth/scrollHeight against this box */
+  word-break: break-word;  /* graceful for unusually long single tokens before fitText shrinks */
+}
+
 
 
 .countdown-pill {
