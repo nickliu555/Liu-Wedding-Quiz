@@ -949,6 +949,15 @@
   // and fades out on its own).
   var STING_VISIBLE_MS = 2200; // how long the sting text holds
   var STING_FADE_MS = 350;     // matches the CSS opacity transition
+  // Wall-clock deadline (Date.now() ms) by which whichever sting is
+  // currently on screen should be fully cleared. Used by the
+  // visibilitychange watchdog below to force-clear a stuck overlay if
+  // the tab was hidden through the entire show/hide window. Shared by
+  // playSting() (per-question "Time's up!" / "Let's see the answers!")
+  // and showFinalQuestionSting() ("💍 Final Question" splash) — these
+  // two are mutually exclusive in the game state machine, so a single
+  // shared deadline is safe.
+  var stingClearAt = 0;
   function playSting(reason, done) {
     var overlay = document.getElementById('stingOverlay');
     var textEl = document.getElementById('stingText');
@@ -963,8 +972,20 @@
     textEl.textContent = copy;
     overlay.classList.remove('timeout', 'all-answered');
     overlay.classList.add(reason);
-    // Trigger fade-in on next frame so the CSS transition runs.
-    requestAnimationFrame(function () { overlay.classList.add('visible'); });
+    // Add .visible SYNCHRONOUSLY. Previously this used requestAnimationFrame
+    // ("trigger fade-in on next frame so the CSS transition runs") — but
+    // rAF callbacks do NOT fire while the browser tab is hidden, whereas
+    // the setTimeout calls below (remove .visible + call `done`) DO still
+    // fire (throttled). When the tab was hidden across the entire sting
+    // window the result was: cleanup setTimeouts ran with .visible never
+    // added; user tabbed back; queued rAF finally ran; .visible got
+    // added with no remaining cleanup → overlay stuck on screen
+    // indefinitely. The CSS transition fires reliably from a synchronous
+    // class add too (the overlay is a permanent DOM node, opacity:0 by
+    // default, so toggling .visible is a clean opacity 0→1 transition —
+    // see showFinalQuestionSting() below for the same pattern).
+    overlay.classList.add('visible');
+    stingClearAt = Date.now() + STING_VISIBLE_MS + STING_FADE_MS;
     // Audio: timeout already has the alarm tick at 0s from the per-second
     // countdown, so we stay quiet there to avoid stepping on it. For
     // 'all-answered' the question ended early with no countdown alarm,
@@ -1260,6 +1281,11 @@
     document.body.classList.add('host-final-intro');
     document.body.classList.remove('host-final-intro-fading');
     ov.classList.add('visible', 'final-question');
+    // Arm the shared visibilitychange watchdog (defined below playSting)
+    // so this splash can't get stuck on screen either if the tab was
+    // hidden through its entire 5.2s lifecycle. Deadline = the final
+    // cleanup setTimeout below.
+    stingClearAt = Date.now() + 5200;
     // Hold, then start the splash leaving while the prompt fades in.
     setTimeout(function () {
       ov.classList.remove('visible');
@@ -1271,6 +1297,30 @@
       document.body.classList.remove('host-final-intro', 'host-final-intro-fading');
     }, 5200);
   }
+
+  // Watchdog: if the host tab was hidden through the entire sting
+  // lifetime, tab-visibility races can leave the overlay stuck on
+  // screen (see the long-form comment in playSting above for the
+  // original rAF-vs-setTimeout bug). Synchronous .visible adds in both
+  // sting functions prevent the primary failure mode; this watchdog is
+  // belt-and-suspenders for any future timing path (browser quirks,
+  // intensive throttling extremes, etc.). When the tab becomes visible
+  // AFTER the sting's expected clear-by deadline (+ 500ms grace so the
+  // normal cleanup setTimeout wins the race during a brief tab-flip),
+  // force-clear every sting class on the overlay AND the body classes
+  // the final-question splash sets. Class removal is idempotent, so
+  // over-cleanup is safe for either sting type.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    if (stingClearAt === 0) return;
+    if (Date.now() < stingClearAt + 500) return; // still inside expected window
+    var overlay = document.getElementById('stingOverlay');
+    if (overlay) {
+      overlay.classList.remove('visible', 'timeout', 'all-answered', 'final-question');
+    }
+    document.body.classList.remove('host-final-intro', 'host-final-intro-fading');
+    stingClearAt = 0;
+  });
 
   function startQTimer(q) {
     stopQTimer();
