@@ -326,7 +326,7 @@
               ? '<p class="result-rank">You are tied at <strong>#' + rank + '</strong> of ' + total + '</p>'
               : '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>')) +
         (showNextPlace
-          ? '<p class="result-next-place">' + pointsToNextPlace + ' pts to next place</p>'
+          ? '<p class="result-next-place">↑ ' + pointsToNextPlace + ' pts to next place</p>'
           : '') +
         answerMarkup +
       '</div>';

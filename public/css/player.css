@@ -474,12 +474,27 @@ body.player.urgent .urgent-bar {
 .result-correct { color: var(--green-deep); }
 .result-wrong   { color: var(--pink-deep); }
 .result-points  { font-size: 42px; font-weight: 700; margin: 10px 0; }
-.result-rank    { color: var(--ink-soft); }
+/* Rank line is the "headline" of placement — slightly larger and a bit
+   bolder than the secondary next-place line below it, so the two lines
+   form a clear visual hierarchy instead of looking like equal-weight
+   muted sibling text. */
+.result-rank {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  margin: 8px 0 0;
+}
+/* Secondary "↑ N pts to next place" line — smaller, italic, muted, with
+   a touch of letter-spacing so it reads as an annotation under the rank
+   rather than a peer line. The ↑ glyph (added in player.js) anchors it
+   as "catch up to the rank above". */
 .result-next-place {
   color: var(--ink-soft);
-  font-size: 14px;
+  font-size: 13px;
+  font-style: italic;
   letter-spacing: 0.02em;
-  margin-top: 2px;
+  margin-top: 4px;
+  opacity: 0.85;
 }
 
 /* ---- Final rank-reveal card -----------------------------------------

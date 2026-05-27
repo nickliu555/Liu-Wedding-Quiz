@@ -6,9 +6,9 @@
 //   node scripts/sim-players.js 50           # 50 players
 //   COUNT=30 URL=http://192.168.1.10:3000 node scripts/sim-players.js
 //   ANSWER=A node scripts/sim-players.js 115 # every player auto-answers A
-//   ANSWER=random node scripts/sim-players.js 115
+//   ANSWER=random node scripts/sim-players.js 115  # (this is the default)
 //
-// ANSWER values: A | B | C | D | random  (default: A)
+// ANSWER values: A | B | C | D | random  (default: random)
 // MAX_ANSWER_DELAY_MS: max random delay before each answer (default: 2500)
 //
 // The script keeps connections open until you press Ctrl+C, so the host
@@ -19,14 +19,14 @@ const crypto = require('crypto');
 
 const COUNT = parseInt(process.argv[2] || process.env.COUNT || '20', 10);
 const URL = process.env.URL || 'http://localhost:3000';
-const ANSWER_MODE = (process.env.ANSWER || 'A').toUpperCase();
+const ANSWER_MODE = (process.env.ANSWER || 'RANDOM').toUpperCase();
 const MAX_ANSWER_DELAY_MS = parseInt(process.env.MAX_ANSWER_DELAY_MS || '2500', 10);
 
-// Map ANSWER setting -> choice index (0=A, 1=B, 2=C, 3=D, -1=random per question)
+// Map ANSWER setting -> choice index (0=A, 1=B, 2=C, 3=D, random per question)
 function chooseAnswerIndex() {
   if (ANSWER_MODE === 'RANDOM') return Math.floor(Math.random() * 4);
   const idx = { A: 0, B: 1, C: 2, D: 3 }[ANSWER_MODE];
-  return typeof idx === 'number' ? idx : 0;
+  return typeof idx === 'number' ? idx : Math.floor(Math.random() * 4);
 }
 
 const FIRST = [
