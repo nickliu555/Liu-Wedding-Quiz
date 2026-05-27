@@ -532,6 +532,24 @@ class Game {
     }));
   }
 
+  // Kahoot-style progress hint: how many points this player needs to
+  // overtake the nearest score group above them on the leaderboard.
+  // Returns null for first place (or if no strictly higher score exists).
+  getPointsToNextPlace(playerId, leaderboard) {
+    const p = this.players.get(playerId);
+    if (!p) return null;
+    const lb = Array.isArray(leaderboard) ? leaderboard : this.getLeaderboard();
+    const idx = lb.findIndex((e) => e.id === playerId);
+    if (idx <= 0) return null;
+
+    for (let i = idx - 1; i >= 0; i--) {
+      if (lb[i].score > p.score) {
+        return (lb[i].score - p.score) + 1;
+      }
+    }
+    return null;
+  }
+
   getPlayerResult(playerId) {
     const p = this.players.get(playerId);
     const q = this.getCurrentQuestion();
@@ -555,6 +573,7 @@ class Game {
       totalScore: p.score,
       rank,
       totalPlayers: lb.length,
+      pointsToNextPlace: this.getPointsToNextPlace(playerId, lb),
       isLastQuestion: this.currentIndex === this.questions.length - 1,
       // The correct answer's index + text. Used by the player client in
       // Announcement Mode to render a single colored "B Florida" line on

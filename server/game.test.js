@@ -424,6 +424,37 @@ function buildGameForResult(pairs) {
   assertEq(res.correctChoice, 'A', 'getPlayerResult: correctChoice is question.choices[correctIndex]');
 }
 
+// Kahoot-style: points needed to overtake the nearest score group above.
+// First place has no "next place" target.
+{
+  const g = buildGameForResult([
+    ['Avery', 100], ['Bea', 50], ['Casey', 10],
+  ]);
+  assertEq(g.getPlayerResult('pid-Avery').pointsToNextPlace, null, 'getPlayerResult: first place -> no next-place target');
+  assertEq(g.getPlayerResult('pid-Bea').pointsToNextPlace, 51, 'getPlayerResult: middle place -> points to overtake leader');
+  assertEq(g.getPlayerResult('pid-Casey').pointsToNextPlace, 41, 'getPlayerResult: lower place -> points to overtake nearest group above');
+}
+
+// Tie groups: both tied players should get the same next-place delta.
+{
+  const g = buildGameForResult([
+    ['Avery', 100], ['Bea', 50], ['Casey', 50], ['Dev', 10],
+  ]);
+  assertEq(g.getPlayerResult('pid-Bea').pointsToNextPlace, 51, 'getPlayerResult: tied rank (alpha-first) -> same next-place target');
+  assertEq(g.getPlayerResult('pid-Casey').pointsToNextPlace, 51, 'getPlayerResult: tied rank (alpha-second) -> same next-place target');
+  assertEq(g.getPlayerResult('pid-Dev').pointsToNextPlace, 41, 'getPlayerResult: post-tie -> nearest higher group');
+}
+
+// All tied at the top: there is no strictly higher score group.
+{
+  const g = buildGameForResult([
+    ['Avery', 0], ['Bea', 0], ['Casey', 0],
+  ]);
+  assertEq(g.getPlayerResult('pid-Avery').pointsToNextPlace, null, 'getPlayerResult: all-tied -> no next-place target (Avery)');
+  assertEq(g.getPlayerResult('pid-Bea').pointsToNextPlace, null, 'getPlayerResult: all-tied -> no next-place target (Bea)');
+  assertEq(g.getPlayerResult('pid-Casey').pointsToNextPlace, null, 'getPlayerResult: all-tied -> no next-place target (Casey)');
+}
+
 // --- podiumRevealed lifecycle ---
 // Gates the player-screen rank reveal. Must start false on a fresh
 // game, must survive an in-game `_enterIntro` (it gets cleared then

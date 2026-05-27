@@ -373,6 +373,12 @@ body.player.urgent .urgent-bar {
 .result-wrong   { color: var(--pink-deep); }
 .result-points  { font-size: 42px; font-weight: 700; margin: 10px 0; }
 .result-rank    { color: var(--ink-soft); }
+.result-next-place {
+  color: var(--ink-soft);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
 
 /* ---- Final rank-reveal card -----------------------------------------
    Shown on each player's phone once the host has finished its podium

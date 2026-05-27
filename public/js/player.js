@@ -264,6 +264,7 @@
     const pts = res.pointsEarned;
     const rank = res.rank;
     const total = res.totalPlayers;
+    const pointsToNextPlace = res.pointsToNextPlace;
     const klass = correct ? 'result-correct' : 'result-wrong';
     const heading = res.answered
       ? (correct ? 'Correct! 🎉' : 'Not quite…')
@@ -290,6 +291,7 @@
            '</div>' +
          '</div>')
       : '';
+    const showNextPlace = !res.isLastQuestion && typeof pointsToNextPlace === 'number' && pointsToNextPlace > 0;
     elView.innerHTML =
       '<div class="state-card">' +
         '<h2 class="serif ' + klass + '">' + heading + '</h2>' +
@@ -306,6 +308,9 @@
               ? '<p class="result-rank">Final results coming up — listen to the DJ! 🎤</p>'
               : '<p class="result-rank">Final results coming up on the big screen…</p>')
           : '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>') +
+        (showNextPlace
+          ? '<p class="result-next-place">' + pointsToNextPlace + ' pts to next place</p>'
+          : '') +
         answerMarkup +
       '</div>';
 
