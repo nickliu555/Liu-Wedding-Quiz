@@ -27,8 +27,9 @@
   // outside LOBBY) so for a player's lifetime it's set at reconnect and
   // doesn't change again — but we still subscribe to state:announcementMode
   // in case a player joins/refreshes while still in LOBBY and the host
-  // toggles it before clicking Start.
-  let announcementMode = false;
+  // toggles it before clicking Start. Defaults to true to match the
+  // server-side default; overwritten by the reconnect ack on connect.
+  let announcementMode = true;
   // Latest lobby player count from state:lobby broadcasts. Null until the
   // first lobby payload arrives.
   let lobbyPlayerCount = null;

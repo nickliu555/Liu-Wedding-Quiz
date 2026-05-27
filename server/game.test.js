@@ -496,11 +496,16 @@ function buildGameForResult(pairs) {
   const g = new Game([
     { id: 'q1', prompt: 'p', choices: ['a', 'b', 'c', 'd'], correctIndex: 0, timeLimitSec: 10 },
   ]);
-  assertEq(g.announcementMode, false, 'announcementMode: defaults to false');
+  assertEq(g.announcementMode, true, 'announcementMode: defaults to true (DJ-led default)');
 
-  const r1 = g.setAnnouncementMode(true);
-  assertEq(r1, { ok: true, announcementMode: true }, 'setAnnouncementMode: ok in LOBBY');
-  assertEq(g.announcementMode, true, 'announcementMode: flag persists after set');
+  // Toggling OFF in LOBBY is allowed.
+  const r1 = g.setAnnouncementMode(false);
+  assertEq(r1, { ok: true, announcementMode: false }, 'setAnnouncementMode: ok in LOBBY');
+  assertEq(g.announcementMode, false, 'announcementMode: flag persists after set');
+
+  // Toggle back ON so the post-start lock asserts against a non-default
+  // value (proves the lock is what's holding the value, not the default).
+  g.setAnnouncementMode(true);
 
   // Start the game \u2014 should now be locked.
   g.players.set('p1', { id: 'p1', name: 'A', score: 0, answers: [], connected: true, socketId: 's1' });
@@ -526,11 +531,13 @@ function buildGameForResult(pairs) {
 }
 
 {
-  // Default (announcementMode OFF) regression: `_enterPrompt` MUST still
-  // arm the auto-advance timer the way it always has.
+  // Announcement-OFF regression: `_enterPrompt` MUST still arm the
+  // auto-advance timer the way it always has. (Constructor default is
+  // now ON, so we explicitly flip it OFF here to exercise this branch.)
   const g = new Game([
     { id: 'q1', prompt: 'p', choices: ['a', 'b', 'c', 'd'], correctIndex: 0, timeLimitSec: 10 },
   ]);
+  g.announcementMode = false;
   g._enterPrompt(0);
   assertEq(g.phase, 'PROMPT', 'default: _enterPrompt lands in PROMPT');
   if (g._phaseTimer === null) {
@@ -548,7 +555,9 @@ function buildGameForResult(pairs) {
     { id: 'q1', prompt: 'p', choices: ['a', 'b', 'c', 'd'], correctIndex: 0, timeLimitSec: 10 },
   ]);
 
-  // Off + LOBBY \u2014 reject (not in announcement mode).
+  // Off + LOBBY — reject (not in announcement mode). Constructor default
+  // is now ON, so we explicitly flip it OFF to exercise this branch.
+  g.announcementMode = false;
   assertEq(
     g.startAnsweringNow(),
     { ok: false, reason: 'not-announcement-mode' },

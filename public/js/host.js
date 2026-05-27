@@ -298,9 +298,13 @@
   //     drumroll calls are no-ops). The DJ owns the audio in this mode.
   //   - FINAL podium reveal renders instantly with a manual "Reveal
   //     results to phones →" button (Phase 5).
-  // Only mutable in LOBBY — server enforces this; client disables the
-  // toggle UI mid-quiz so the operator can't try.
-  let announcementMode = false;
+  // Defaults to true to match the server-side default (DJ-led wedding
+  // deployment). The connect ack below overwrites this with the
+  // authoritative server value the moment it arrives, so this only
+  // controls the brief pre-ack window. Only mutable in LOBBY — server
+  // enforces this; client disables the toggle UI mid-quiz so the
+  // operator can't try.
+  let announcementMode = true;
   function updateAnnouncementUI() {
     if (announcementToggle) {
       announcementToggle.setAttribute('aria-checked', announcementMode ? 'true' : 'false');

@@ -106,13 +106,13 @@ body.player.player-waiting .petal-layer { display: block; }
   box-shadow: 0 2px 8px rgba(79, 107, 84, 0.25);
   transition: transform 0.2s ease;
 }
-.player-score-chip .ring {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 2.5px solid var(--gold);
-  box-shadow: 0 0 0 1px rgba(201, 169, 110, 0.35);
+.player-score-chip .score-spark {
+  /* Decorative sparkle to the left of the score number. Tied to the
+     wedding-quiz theme and reads as "points earned." Emoji width varies
+     a bit per platform, so we lock a font-size and let flex-gap on the
+     parent (.player-score-chip { gap: 8px }) handle spacing. */
+  font-size: 16px;
+  line-height: 1;
   flex: 0 0 auto;
 }
 .player-score-chip .score-num {
@@ -156,10 +156,15 @@ body.player.player-waiting .petal-layer { display: block; }
   position: relative;
   width: 56px;
   height: 56px;
-  margin: 18px auto 0;
-  /* Reserve layout space for the outward ring growth (1.7x scale)
-     so following text always sits just below the wave envelope. */
-  padding-bottom: 20px;
+  /* The rings scale outward to 1.7x of this 56x56 box (see
+     @keyframes waitingRingPulse), which overflows ~20px past the bottom
+     edge of the box. Reserve real layout space BELOW the box (not inside
+     it via padding — that would stretch the absolutely-positioned rings
+     into ovals and push the wave even further down) so the
+     "N guests in lobby" line that follows always sits clear of the
+     wave's full envelope. 26px = ~20px ring overshoot + ~6px breathing
+     room (text sits just clear, not touching the wave). */
+  margin: 18px auto 26px;
 }
 .waiting-pulse-heart {
   position: absolute;
@@ -182,7 +187,7 @@ body.player.player-waiting .petal-layer { display: block; }
 }
 .waiting-pulse-ring:nth-child(2) { animation-delay: 0.7s; }
 .waiting-lobby-count {
-  margin: 2px 0 0;
+  margin: 0 0 0;
   color: var(--ink-soft);
   font-size: 14px;
   letter-spacing: 0.01em;

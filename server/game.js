@@ -63,9 +63,12 @@ class Game {
     //     wired to `startAnsweringNow()` below).
     //   - The host UI suppresses fade-in animations, audio cues, and
     //     the podium reveal sequence (handled client-side).
-    // Only mutable while in LOBBY — once `start()` runs, the flag is
-    // locked for the duration of the quiz. See `setAnnouncementMode`.
-    this.announcementMode = false;
+    // Defaults to TRUE because the primary deployment target is a
+    // wedding where the DJ runs the room and the host screen isn't
+    // always projected. Only mutable while in LOBBY — once `start()`
+    // runs, the flag is locked for the duration of the quiz. See
+    // `setAnnouncementMode`.
+    this.announcementMode = true;
   }
 
   // ---------------- Lobby / players ----------------
@@ -88,8 +91,15 @@ class Game {
 
   dedupeName(name) {
     if (!this.nameIsTaken(name)) return name;
-    for (let i = 2; i < 1000; i++) {
-      const candidate = `${name} (${i})`.slice(0, MAX_NAME_LEN);
+    // We do NOT slice the candidate back to MAX_NAME_LEN here. The 25-char
+    // cap applies to the player's *typed* input (enforced by sanitizeName
+    // and the UI's <input maxlength="25">). The dedupe suffix is the
+    // service's own annotation — letting it push past 25 (max overhead
+    // ~5 chars: " (99)") keeps two guests with the same 22-25 char name
+    // visibly distinct on the leaderboard instead of collapsing them
+    // back to the same string. Worst-case stored length is 25 + 5 = 30.
+    for (let i = 2; i < 100; i++) {
+      const candidate = `${name} (${i})`;
       if (!this.nameIsTaken(candidate)) return candidate;
     }
     return name; // give up; caller will see duplicate but it's fine
