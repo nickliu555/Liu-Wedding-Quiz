@@ -529,8 +529,13 @@ body.host {
   border-radius: 999px;
 }
 .announcement-reveal-row #revealToPhonesBtn[disabled] {
+  /* The disabled state here is the terminal "✓ Results revealed to phones"
+     confirmation — the action is complete, not pending. Use a plain
+     default cursor instead of the global button:disabled `not-allowed`
+     (which would read as "blocked") or `cursor: progress` (which would
+     read as "still loading", showing the macOS blue spinner). */
   opacity: 0.6;
-  cursor: progress;
+  cursor: default;
 }
 
 /* While in Announcement Mode's PROMPT phase, hide the timer ring and the
@@ -869,6 +874,9 @@ body.host:has(#view-final.active) .host-main {
   justify-content: flex-start;
   height: 100%;
   min-height: 0;
+}
+.host-announcement-final .final-view {
+  padding-top: 28px;
 }
 .final-view > h2,
 .final-view > .results-intro,

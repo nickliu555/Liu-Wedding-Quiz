@@ -1414,6 +1414,9 @@
 
   function renderFinal(f) {
     show('final');
+    document.body.classList.remove('host-announcement-final');
+    var congratsEl = document.getElementById('finalCongrats');
+    if (congratsEl) congratsEl.hidden = false;
 
     // ---- Announcement Mode: instant render, manual reveal-to-phones ----
     // In Announcement Mode the DJ does the dramatic call-out aloud, so we
@@ -1471,14 +1474,16 @@
   // burst confetti, and does NOT auto-fire host:podiumDone.
   function renderFinalAnnouncement(f) {
     // Skip the "pre-reveal" overlay state entirely — no intro hold.
+    document.body.classList.add('host-announcement-final');
     var finalView = document.querySelector('.final-view');
     if (finalView) finalView.classList.remove('pre-reveal');
     var intro = document.getElementById('resultsIntro');
     if (intro) { intro.classList.remove('show'); intro.classList.add('hide'); }
-    // Congratulations banner: show immediately (no per-tier suspense to
-    // protect).
     var congratsEl = document.getElementById('finalCongrats');
-    if (congratsEl) congratsEl.classList.add('visible');
+    if (congratsEl) {
+      congratsEl.classList.remove('visible');
+      congratsEl.hidden = true;
+    }
 
     // Build podium DOM in its final-revealed state. We reuse podiumCell()
     // (which already returns the final HTML) and then add the `revealed`

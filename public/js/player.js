@@ -29,6 +29,9 @@
   // in case a player joins/refreshes while still in LOBBY and the host
   // toggles it before clicking Start.
   let announcementMode = false;
+  // Latest lobby player count from state:lobby broadcasts. Null until the
+  // first lobby payload arrives.
+  let lobbyPlayerCount = null;
 
   // ---------------- Rendering ----------------
   function render(html) {
@@ -57,6 +60,13 @@
     const waitingLead = announcementMode
       ? 'The quiz will start soon. Follow along with the DJ.'
       : 'Look up at the big screen. The quiz will start soon.';
+    const lobbyCountLine =
+      announcementMode && typeof lobbyPlayerCount === 'number'
+        ? ('<p class="waiting-lobby-count">' +
+            '<span class="waiting-lobby-count-num">' + lobbyPlayerCount + '</span> ' +
+            (lobbyPlayerCount === 1 ? 'guest' : 'guests') + ' in lobby' +
+          '</p>')
+        : '';
     render(
       '<h2 class="serif">You\'re in!</h2>' +
       '<p>' + waitingLead + '</p>' +
@@ -65,6 +75,7 @@
         '<span class="waiting-pulse-ring"></span>' +
         '<span class="waiting-pulse-heart">♥</span>' +
       '</div>' +
+      lobbyCountLine +
       '<p style="margin-top:14px; color: var(--muted); font-size: 14px;">Keep this tab open.</p>'
     );
     // Reveal the ambient petal drift only while the player is parked here.
@@ -124,7 +135,7 @@
         '<div class="state-card prompt-card">' +
           '<div class="intro-hint">Question ' + (p.index + 1) + ' of ' + p.total + '</div>' +
           '<h2 class="serif">🎤 Listen up! 🎤</h2>' +
-          '<p>The DJ is reading the next question.</p>' +
+          '<p>The DJ is reading the question.</p>' +
           '<p style="margin-top:10px; color: var(--muted); font-size: 14px;">Choices appear in a moment…</p>' +
         '</div>';
       return;
@@ -285,10 +296,10 @@
       && typeof res.correctChoice === 'string';
     const answerMarkup = showAnswer
       ? ('<div class="result-answer-wrap">' +
-           '<div class="row-tile row-tile-display tile-color-' + res.correctIndex + '" ' +
+           '<div class="row-tile row-tile-display" ' +
                 'role="img" ' +
                 'aria-label="Correct answer: ' + CHOICE_LETTERS[res.correctIndex] + ' ' + escapeHtml(res.correctChoice) + '">' +
-             '<span class="row-badge tile-color-' + res.correctIndex + '" aria-hidden="true">' + shape(res.correctIndex) + '</span>' +
+             '<span class="row-badge" aria-hidden="true">' + shape(res.correctIndex) + '</span>' +
              '<span class="row-text">' + escapeHtml(res.correctChoice) + '</span>' +
              '<span class="row-check" aria-hidden="true">✓</span>' +
            '</div>' +
@@ -310,7 +321,9 @@
           ? (announcementMode
               ? '<p class="result-rank">Final results coming up — listen to the DJ! 🎤</p>'
               : '<p class="result-rank">Final results coming up on the big screen…</p>')
-          : '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>') +
+          : (res.tied
+              ? '<p class="result-rank">You are tied at <strong>#' + rank + '</strong> of ' + total + '</p>'
+              : '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>')) +
         (showNextPlace
           ? '<p class="result-next-place">' + pointsToNextPlace + ' pts to next place</p>'
           : '') +
@@ -773,6 +786,11 @@
 
   socket.on('state:lobby', function (s) {
     if (rejected) return;
+    if (s && Array.isArray(s.players)) {
+      lobbyPlayerCount = s.players.length;
+    } else if (s && typeof s.total === 'number') {
+      lobbyPlayerCount = s.total;
+    }
     // Note: state:lobby is also broadcast mid-game (e.g. when a player joins
     // or disconnects) to keep the host's roster fresh. Only enable reactions
     // when the game's phase is actually LOBBY — otherwise we'd un-disable
@@ -803,6 +821,9 @@
     announcementMode = !!(p && p.on);
     if (reactionBar && !rejected) {
       reactionBar.hidden = announcementMode;
+    }
+    if (document.body.classList.contains('player-waiting')) {
+      renderLobbyWaiting();
     }
   });
 

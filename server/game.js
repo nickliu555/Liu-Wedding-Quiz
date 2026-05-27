@@ -16,7 +16,7 @@ const PHASES = {
   FINAL: 'FINAL',
 };
 
-const MAX_NAME_LEN = 20;
+const MAX_NAME_LEN = 25;
 const INTRO_DURATION_MS = 4000;
 // After the countdown reaches 0 the splash sits on "Go!" for a brief beat
 // before we transition into the first question's PROMPT phase.
@@ -565,6 +565,11 @@ class Game {
     // fallback is defensive only.
     const idx = lb.findIndex((e) => e.id === playerId);
     const rank = idx >= 0 ? lb[idx].rank : (lb.length || 1);
+    // True when at least one other player shares this rank. The player
+    // client uses this to show "Tied at #N" on the post-question card
+    // (the rank itself is already correct via competition ranking, so
+    // this flag is purely for copy clarity).
+    const tied = lb.filter((e) => e.rank === rank).length > 1;
     return {
       questionId: q.id,
       answered: !!a,
@@ -572,6 +577,7 @@ class Game {
       pointsEarned: a ? a.points : 0,
       totalScore: p.score,
       rank,
+      tied,
       totalPlayers: lb.length,
       pointsToNextPlace: this.getPointsToNextPlace(playerId, lb),
       isLastQuestion: this.currentIndex === this.questions.length - 1,

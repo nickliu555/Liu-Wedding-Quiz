@@ -30,7 +30,7 @@ body.join {
   padding: 14px 0 8px;
 }
 .join-header .brand { font-size: 32px; }
-.join-header p { color: var(--ink-soft); margin: 8px 0 0; }
+.join-header p { color: var(--ink-soft); margin: 12px 0 0; }
 
 /* Petals on the player page only show while waiting in the lobby. */
 body.player .petal-layer { display: none; }
@@ -45,7 +45,7 @@ body.player.player-waiting .petal-layer { display: block; }
 .join-header, .join-form { position: relative; z-index: 2; }
 
 .join-form {
-  margin: 26px auto 0;
+  margin: 20px auto 0;
   width: 100%;
   max-width: 500px;
   background: var(--surface);
@@ -77,9 +77,17 @@ body.player.player-waiting .petal-layer { display: block; }
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   padding: 8px 4px;
 }
-.player-name { font-weight: 600; }
+.player-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .player-score { color: var(--green-deep); font-weight: 700; }
 
 /* Sage pill with a tiny gold "wedding ring" beside the score number.
@@ -148,7 +156,10 @@ body.player.player-waiting .petal-layer { display: block; }
   position: relative;
   width: 56px;
   height: 56px;
-  margin: 18px auto 6px;
+  margin: 18px auto 0;
+  /* Reserve layout space for the outward ring growth (1.7x scale)
+     so following text always sits just below the wave envelope. */
+  padding-bottom: 20px;
 }
 .waiting-pulse-heart {
   position: absolute;
@@ -170,6 +181,16 @@ body.player.player-waiting .petal-layer { display: block; }
   animation: waitingRingPulse 1.4s ease-out infinite;
 }
 .waiting-pulse-ring:nth-child(2) { animation-delay: 0.7s; }
+.waiting-lobby-count {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+.waiting-lobby-count-num {
+  font-weight: 700;
+  color: var(--ink);
+}
 @keyframes waitingHeartBeat {
   0%, 100% { transform: scale(1); }
   18%      { transform: scale(1.22); }
@@ -279,8 +300,10 @@ body.player.player-waiting .petal-layer { display: block; }
    itself, not a floating sibling — to mark it as "the correct answer". */
 .result-answer-wrap {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  margin: 28px 0 4px;
+  margin: 38px 0 4px;
   width: 100%;
 }
 .result-answer-wrap .row-tile-display {
@@ -288,8 +311,14 @@ body.player.player-waiting .petal-layer { display: block; }
   max-width: min(360px, calc(100% - 24px));
   cursor: default;
   pointer-events: none;
+  background: color-mix(in srgb, var(--ink-soft) 10%, white);
+  border-color: color-mix(in srgb, var(--ink-soft) 32%, white);
 }
 .result-answer-wrap .row-tile-display:active { transform: none; }
+.result-answer-wrap .row-tile-display .row-badge {
+  background: color-mix(in srgb, var(--ink-soft) 22%, white);
+  color: var(--ink);
+}
 /* Green confirmation check on the right edge of the display tile. Sits
    inside the tile alongside the badge and text, so the trio reads as
    one cohesive "this is the correct answer" row. */
@@ -553,7 +582,7 @@ html { touch-action: manipulation; }
   }
   body.join .join-header { padding: 10px 0 6px; }
   body.join .join-form {
-    margin-top: 18px;
+    margin-top: 14px;
     padding: 20px;
   }
   .state-card { padding: 22px 18px; }
