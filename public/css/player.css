@@ -18,9 +18,16 @@ body.join, body.player {
 }
 
 /* ---- Join page ---- */
+/* Reserve space for the fixed top garland so the brand/title never
+   overlap it. This is join-only; player screens keep their original
+   spacing. */
+body.join {
+  padding-top: calc(84px + env(safe-area-inset-top, 0px));
+}
+
 .join-header {
   text-align: center;
-  padding: 24px 0 12px;
+  padding: 14px 0 8px;
 }
 .join-header .brand { font-size: 32px; }
 .join-header p { color: var(--ink-soft); margin: 8px 0 0; }
@@ -38,7 +45,9 @@ body.player.player-waiting .petal-layer { display: block; }
 .join-header, .join-form { position: relative; z-index: 2; }
 
 .join-form {
-  margin-top: 40px;
+  margin: 26px auto 0;
+  width: 100%;
+  max-width: 500px;
   background: var(--surface);
   padding: 24px;
   border-radius: var(--radius);
@@ -538,6 +547,14 @@ html { touch-action: manipulation; }
     padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     padding-left: calc(12px + env(safe-area-inset-left, 0px));
     padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+  body.join {
+    padding-top: calc(78px + env(safe-area-inset-top, 0px));
+  }
+  body.join .join-header { padding: 10px 0 6px; }
+  body.join .join-form {
+    margin-top: 18px;
+    padding: 20px;
   }
   .state-card { padding: 22px 18px; }
   .reaction-bar {

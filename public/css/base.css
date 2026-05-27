@@ -248,3 +248,18 @@ input[type="text"]:focus { border-color: var(--green-deep); }
   margin: 0;
   z-index: 1;
 }
+
+/* Symmetric counterpart to .vines-bottom-anchor for pages that need a
+   framed look (join screen). Keeps the garland constrained to the same
+   width as the card container, just below the safe-area inset. */
+.vines-top-anchor {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 560px;
+  top: calc(6px + env(safe-area-inset-top, 0px));
+  margin: 0;
+  opacity: 0.72;
+  z-index: 1;
+}
