@@ -54,9 +54,12 @@
   }
 
   function renderLobbyWaiting() {
+    const waitingLead = announcementMode
+      ? 'The quiz will start soon. Follow along with the DJ.'
+      : 'Look up at the big screen. The quiz will start soon.';
     render(
       '<h2 class="serif">You\'re in!</h2>' +
-      '<p>Look up at the big screen. The quiz will start soon.</p>' +
+      '<p>' + waitingLead + '</p>' +
       '<div class="waiting-pulse" aria-hidden="true">' +
         '<span class="waiting-pulse-ring"></span>' +
         '<span class="waiting-pulse-ring"></span>' +
