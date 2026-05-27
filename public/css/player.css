@@ -72,6 +72,65 @@ body.player.player-waiting .petal-layer { display: block; }
   min-height: 20px;
 }
 
+/* ---- Lobby-closed notice on /join ----
+   Shown when join.js detects (via lobby:status probe or live state:lobby
+   broadcast) that the host has already started the quiz. The form + header
+   stay in the DOM but are blurred and inert behind a centered, in-focus
+   notice card. Live-flips back to the interactive form if the host resets
+   to LOBBY. See public/js/join.js -> setLobbyOpen(). */
+body.join.lobby-closed .join-header,
+body.join.lobby-closed .join-form {
+  filter: blur(6px);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+  transition: filter 0.25s ease, opacity 0.25s ease;
+}
+.join-header,
+.join-form {
+  /* Match the same transition so the un-blur on host:reset is also smooth. */
+  transition: filter 0.25s ease, opacity 0.25s ease;
+}
+.closed-notice {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 24px;
+  pointer-events: none; /* card itself re-enables pointer events */
+}
+/* The `hidden` HTML attribute's UA `display: none` is overridden by the
+   `display: flex` above (author styles beat UA styles at equal specificity).
+   Restore the hide-when-hidden behavior explicitly so the notice is only
+   shown when join.js sets `closedNotice.hidden = false`. Without this rule
+   the card is permanently visible centered over the form, making it look
+   like players can't join even when the lobby is open. */
+.closed-notice[hidden] { display: none; }
+.closed-notice-card {
+  background: var(--surface);
+  padding: 22px 26px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+  max-width: 360px;
+  pointer-events: auto;
+}
+.closed-notice-title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 22px;
+  margin: 0 0 8px;
+  color: var(--ink);
+}
+.closed-notice-sub {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
 /* ---- Player page ---- */
 .player-top {
   display: flex;

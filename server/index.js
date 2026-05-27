@@ -274,6 +274,17 @@ io.on('connection', (socket) => {
     broadcastLobby();
   });
 
+  // Lightweight lobby-open probe used by the /join page so it can show
+  // a "quiz already in progress" notice up front instead of letting a
+  // late-arriving guest type a name and only then learn the lobby is
+  // closed. The page also listens for state:lobby broadcasts (already
+  // fired on host:start and host:reset) to live-flip when the host
+  // starts the quiz or resets back to LOBBY.
+  socket.on('lobby:status', (_p, ack) => {
+    if (typeof ack !== 'function') return;
+    ack({ phase: game.phase, open: game.phase === PHASES.LOBBY });
+  });
+
   socket.on('player:answer', ({ questionId, choiceIndex }, ack) => {
     if (!playerId) return ack && ack({ ok: false, reason: 'not-joined' });
     const res = game.submitAnswer({ playerId, questionId, choiceIndex });

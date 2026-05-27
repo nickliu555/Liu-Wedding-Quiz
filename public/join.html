@@ -38,6 +38,17 @@
     <div id="errorMsg" class="error-msg" aria-live="polite"></div>
   </form>
 
+  <!-- Shown when the host has already started the quiz. join.js toggles
+       body.lobby-closed (which blurs the header + form behind) and the
+       [hidden] attribute on this section. Sits above the blurred form
+       as a centered, in-focus notice card. -->
+  <section id="closedNotice" class="closed-notice" hidden aria-live="polite">
+    <div class="closed-notice-card">
+      <p class="closed-notice-title">The quiz has already started</p>
+      <p class="closed-notice-sub">Sorry, you can't join now.</p>
+    </div>
+  </section>
+
   <!-- Decorative rose garland anchored above the credit footer -->
   <div class="vines-top vines-bottom-anchor" aria-hidden="true"></div>
 
