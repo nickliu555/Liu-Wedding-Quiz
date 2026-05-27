@@ -521,11 +521,6 @@ body.player.urgent .urgent-bar {
   margin: 0 0 8px;
   font-size: 15px;
 }
-.rank-reveal-card .rank-total {
-  color: var(--ink-soft);
-  margin: 0 0 12px;
-  font-size: 15px;
-}
 .rank-reveal-card .rank-footnote {
   /* Closing sentiment — tinted with the wedding-palette pink so it
      reads as a warm sign-off, set apart from the neutral-ink rank/

@@ -278,7 +278,6 @@
     const correct = res.wasCorrect;
     const pts = res.pointsEarned;
     const rank = res.rank;
-    const total = res.totalPlayers;
     const pointsToNextPlace = res.pointsToNextPlace;
     const klass = correct ? 'result-correct' : 'result-wrong';
     const heading = res.answered
@@ -323,8 +322,8 @@
               ? '<p class="result-rank">Final results coming up — listen to the DJ! 🎤</p>'
               : '<p class="result-rank">Final results coming up on the big screen…</p>')
           : (res.tied
-              ? '<p class="result-rank">You are tied at <strong>#' + rank + '</strong> of ' + total + '</p>'
-              : '<p class="result-rank">You are <strong>#' + rank + '</strong> of ' + total + '</p>')) +
+              ? '<p class="result-rank">You are tied at <strong>#' + rank + '</strong></p>'
+              : '<p class="result-rank">You are <strong>#' + rank + '</strong></p>')) +
         (showNextPlace
           ? '<p class="result-next-place">↑ ' + pointsToNextPlace + ' pts to next place</p>'
           : '') +
@@ -398,7 +397,6 @@
       return;
     }
     const rank = me.rank;
-    const totalPlayers = lb.length;
     // Tie size = number of leaderboard rows sharing the same rank value.
     // The server's `getLeaderboard()` uses competition ranking (1,2,2,4)
     // so this count is reliable.
@@ -423,38 +421,43 @@
     let medal = '';
     let headline = '';
     let rankLine = '';   // separate line showing the actual rank (under any medal)
-    // "out of N players" is shown under EVERY case so players always
-    // know the size of the field they competed in. (Previously this
-    // line was only shown for non-medal finishes, which was an
-    // inconsistency.)
+    // Rank is shown on its own — we intentionally do NOT append a
+    // denominator ("out of N players"). The denominator implies "and
+    // you could have placed worse than this", which makes mid-pack
+    // finishes feel like near-misses with last place. The rank itself
+    // is the truth; the field size is not part of the per-player brag.
     if (tier === 1) {
       medal = '🥇';
       headline = tied ? 'Tied for the win!' : 'You won!';
       rankLine = tied
-        ? '<p class="rank-tied-count">Tied at #' + rank + ' (' + tieCount + ' winners)</p>'
-        : '<p class="rank-tied-count">You finished at #' + rank + '</p>';
+        ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' winners)</p>'
+        : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
     } else if (tier === 2) {
       medal = '🥈';
       headline = 'Silver medal!';
       rankLine = tied
-        ? '<p class="rank-tied-count">Tied at #' + rank + ' (' + tieCount + ' players)</p>'
-        : '<p class="rank-tied-count">You finished at #' + rank + '</p>';
+        ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' players)</p>'
+        : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
     } else if (tier === 3) {
       medal = '🥉';
       headline = 'Bronze medal!';
       rankLine = tied
-        ? '<p class="rank-tied-count">Tied at #' + rank + ' (' + tieCount + ' players)</p>'
-        : '<p class="rank-tied-count">You finished at #' + rank + '</p>';
+        ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' players)</p>'
+        : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
     } else {
-      // Off the podium — no medal. Rank is already in the headline so
-      // we skip the separate rank line. We intentionally do NOT show
-      // the tie size here: at e.g. #14 the "(N players)" count adds
-      // clutter without celebration value. The count is still shown
-      // on podium tiers above where it reads as bragging rights
-      // ("3 winners" / "2 players tied for silver").
-      headline = tied ? ('Tied at #' + rank) : ('#' + rank);
+      // Off the podium — give the card the same 4-element rhythm as the
+      // podium tiers (medal slot, headline, rank line, footnote) so it
+      // doesn't read as bare. The 🎉 fills the medal slot as a non-metal
+      // "completion" glyph, the headline is a warm sign-off, and the
+      // rank moves to its own line using the same `.rank-tied-count`
+      // pattern the podium tiers use — including the "(N players)" tie
+      // count for consistency.
+      medal = '🎉';
+      headline = 'Great game!';
+      rankLine = tied
+        ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' players)</p>'
+        : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
     }
-    const totalLine = '<p class="rank-total">out of ' + totalPlayers + ' players</p>';
     // Score is already shown in the sticky top bar chip; no need to
     // repeat it here.
 
@@ -463,7 +466,6 @@
         (medal ? '<div class="rank-medal" aria-hidden="true">' + medal + '</div>' : '') +
         '<h2 class="serif rank-headline">' + headline + '</h2>' +
         rankLine +
-        totalLine +
         '<p class="rank-footnote">Thanks for playing! 💕</p>' +
       '</div>';
   }
