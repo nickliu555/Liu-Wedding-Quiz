@@ -740,6 +740,91 @@ body.host.host-announcement-prompt.host-final-question .final-question-tag {
   font-size: 20px;
   color: var(--ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* Anchor the hover tooltip bubble (::after) and cue the host that
+     this element is interactive. The bubble lives in host.css below. */
+  position: relative;
+  cursor: help;
+}
+
+/* Hover/focus tooltip on the bar-chart choice text. Truncation in the
+   row is intentional (keeps the 5-column grid aligned across rows), so
+   the host needs an affordance to read the full text of long choices.
+   Always-on — we don't try to detect actual overflow because the
+   bubble is unobtrusive and serves as a "confirm what I read" hover
+   even when the row already fits. The native `title` attribute on the
+   element provides a fallback for touch/assistive contexts where this
+   custom bubble is suppressed.
+
+   Caveat handled by the `:hover` rule on `.bar-row:not(.correct)` at
+   the bottom: non-correct rows are dimmed via `opacity: 0.55` + a
+   grayscale filter, both of which cascade to descendants and CANNOT
+   be reset on the child bubble. We instead lift the dim on hover so
+   the tooltip (and its parent row) read at full contrast. */
+@media (hover: hover) {
+  .bar-row .choice-text::after {
+    content: attr(data-full);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 0;
+    /* Cap width so wildly long choices don't bleed off-screen; allow
+       wrapping inside the bubble (the row itself stays single-line). */
+    max-width: min(560px, 90vw);
+    width: max-content;
+    padding: 10px 14px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1.35;
+    white-space: normal;
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 50;
+  }
+  /* Little gold-bordered tail pointing down at the truncated row. */
+  .bar-row .choice-text::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 16px;
+    width: 10px;
+    height: 10px;
+    background: var(--surface);
+    border-right: 1px solid var(--gold);
+    border-bottom: 1px solid var(--gold);
+    transform: rotate(45deg) translateY(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 51;
+  }
+  .bar-row .choice-text:hover::after,
+  .bar-row .choice-text:focus::after,
+  .bar-row .choice-text:focus-visible::after {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .bar-row .choice-text:hover::before,
+  .bar-row .choice-text:focus::before,
+  .bar-row .choice-text:focus-visible::before {
+    opacity: 1;
+    transform: rotate(45deg) translateY(0);
+  }
+  /* Undim wrong-answer rows while the host is inspecting them, so the
+     tooltip (which inherits the row's opacity & grayscale filter) reads
+     at full contrast. opacity on a parent cannot be reset on the
+     child, so we lift it from the row for the duration of the hover. */
+  .bar-row:not(.correct):hover,
+  .bar-row:not(.correct):focus-within {
+    opacity: 1;
+    filter: none;
+  }
 }
 .bar-row .bar {
   height: 28px; border-radius: 8px; background: #ece6dd; overflow: hidden; position: relative;

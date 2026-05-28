@@ -10,6 +10,11 @@
   const elName = document.getElementById('playerName');
   const elScore = document.getElementById('playerScore');
   const elView = document.getElementById('playerView');
+  // Full-screen confetti overlay. Hidden by default; shown only when the
+  // final rank-reveal lands this player in tier 1 (gold). Managed
+  // exclusively by renderPlayerRank() / renderRejected() so it can never
+  // leak into normal gameplay.
+  const elConfetti = document.getElementById('confettiLayer');
 
   elName.textContent = localStorage.getItem('quiz.playerName') || '…';
 
@@ -283,15 +288,14 @@
     const heading = res.answered
       ? (correct ? 'Correct! 🎉' : 'Not quite…')
       : 'Too slow!';
-    // Announcement Mode only, and only when the player got it wrong or
-    // didn't answer: render a non-interactive copy of the correct row
-    // tile (same Duolingo-style row from the question page — colored
-    // border, badge, answer text). Reusing the row-tile visual language
-    // keeps the result card tied to what they saw a moment ago, without
-    // inventing any new primitive. Correct outcomes skip this (clean
-    // win card stays clean).
+    // Announcement Mode: render a non-interactive copy of the correct
+    // row tile (same Duolingo-style row from the question page — colored
+    // border, badge, answer text). Shown regardless of whether the
+    // player got it right, so every phone in the room sees the same
+    // confirmation tile after the host reveals. Reusing the row-tile
+    // visual language keeps the result card tied to what they saw a
+    // moment ago, without inventing any new primitive.
     const showAnswer = announcementMode
-      && !correct
       && typeof res.correctIndex === 'number'
       && typeof res.correctChoice === 'string';
     const answerMarkup = showAnswer
@@ -370,6 +374,11 @@
   // standings revealed (i.e. `state:rankReveal` has fired, or the
   // reconnect ack told us `podiumRevealed: true`).
   function renderPlayerRank() {
+    // Default to no confetti at every entry point. The tier-1 branch
+    // below explicitly opts in; every other branch (placeholder, missing
+    // player, non-gold tier) inherits this safe default. Set first so
+    // even the early-return placeholder branches never show confetti.
+    if (elConfetti) elConfetti.hidden = true;
     if (!finalPayload || !Array.isArray(finalPayload.fullLeaderboard)) {
       // Safety net: server should always send fullLeaderboard before
       // signaling rank reveal, but if something raced just fall back to
@@ -432,6 +441,9 @@
       rankLine = tied
         ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' winners)</p>'
         : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
+      // Winner-only: kick off the falling confetti overlay. Hidden in
+      // every other tier (and reset to hidden at the top of this fn).
+      if (elConfetti) elConfetti.hidden = false;
     } else if (tier === 2) {
       medal = '🥈';
       headline = 'Silver medal!';
@@ -474,6 +486,10 @@
     setReactionsAllowed(false);
     // Player is no longer in the game — hide the bar entirely.
     if (reactionBar) reactionBar.hidden = true;
+    // Also kill any lingering winner confetti — e.g. host resets the
+    // game right after a podium reveal, the winning player would
+    // otherwise sit on the rejoin card with confetti still falling.
+    if (elConfetti) elConfetti.hidden = true;
     const msg = {
       'kicked': 'You were removed by the host.',
       'lobby-closed': 'The quiz has already started.',

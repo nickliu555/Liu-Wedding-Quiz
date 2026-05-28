@@ -535,6 +535,84 @@ body.player.urgent .urgent-bar {
   to   { opacity: 1; transform: scale(1)    translateY(0);   }
 }
 
+/* ---- Winner confetti -------------------------------------------------
+   Shown only when this player's final podium tier is 1 (gold). The
+   `[hidden]` attribute is removed by renderPlayerRank() in the tier-1
+   branch and re-applied in every other branch so non-winners never
+   see it. Pure CSS animation, 30 small rectangles in the wedding
+   palette falling on infinite loop with varied position, color,
+   duration, delay, and horizontal drift to feel organic.
+
+   The author rule `.confetti-layer { ... }` sets `display: block`,
+   which by CSS specificity outranks the UA-stylesheet [hidden] rule
+   at equal specificity (author > UA). The `.confetti-layer[hidden]`
+   rule below re-asserts display:none at higher specificity so the
+   `hidden` attribute actually hides the layer. */
+.confetti-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+  overflow: hidden;
+  display: block;
+}
+.confetti-layer[hidden] { display: none; }
+.confetti {
+  position: absolute;
+  top: -30px;
+  width: 8px;
+  height: 14px;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation-name: confettiFall;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  border-radius: 1px;
+}
+@keyframes confettiFall {
+  0%   { transform: translate3d(0, -10vh, 0) rotate(0deg);                    opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { transform: translate3d(var(--drift, 30px), 115vh, 0) rotate(720deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti-layer { display: none !important; }
+}
+/* 30 pieces — spread across the viewport with varied colors (5 from the
+   wedding palette), durations (4.2s – 7.4s), delays (0 to -6s), and
+   horizontal drift (-55px to +55px). Hand-tuned so the falling pattern
+   never looks like a uniform grid. */
+.confetti-1  { left:  3%; background: var(--pink);      animation-duration: 5.2s; animation-delay: -0.3s; --drift:  38px; }
+.confetti-2  { left:  8%; background: var(--gold);      animation-duration: 6.4s; animation-delay: -2.1s; --drift: -22px; }
+.confetti-3  { left: 12%; background: var(--pink-deep); animation-duration: 4.7s; animation-delay: -1.4s; --drift:  18px; }
+.confetti-4  { left: 17%; background: var(--green);     animation-duration: 5.9s; animation-delay: -4.6s; --drift: -45px; }
+.confetti-5  { left: 21%; background: var(--pink);      animation-duration: 6.8s; animation-delay: -0.8s; --drift:  28px; }
+.confetti-6  { left: 26%; background: var(--gold);      animation-duration: 4.2s; animation-delay: -3.2s; --drift: -12px; }
+.confetti-7  { left: 30%; background: var(--pink-deep); animation-duration: 7.1s; animation-delay: -1.9s; --drift:  52px; }
+.confetti-8  { left: 35%; background: #FFFFFF;          animation-duration: 5.5s; animation-delay: -5.3s; --drift: -38px; }
+.confetti-9  { left: 39%; background: var(--green);     animation-duration: 6.2s; animation-delay: -0.6s; --drift:  15px; }
+.confetti-10 { left: 44%; background: var(--gold);      animation-duration: 4.9s; animation-delay: -2.7s; --drift: -50px; }
+.confetti-11 { left: 48%; background: var(--pink);      animation-duration: 6.7s; animation-delay: -4.1s; --drift:  32px; }
+.confetti-12 { left: 53%; background: var(--pink-deep); animation-duration: 5.3s; animation-delay: -1.1s; --drift: -25px; }
+.confetti-13 { left: 57%; background: #FFFFFF;          animation-duration: 7.4s; animation-delay: -3.8s; --drift:  44px; }
+.confetti-14 { left: 62%; background: var(--green);     animation-duration: 4.6s; animation-delay: -0.4s; --drift: -18px; }
+.confetti-15 { left: 66%; background: var(--gold);      animation-duration: 6.0s; animation-delay: -5.7s; --drift:  35px; }
+.confetti-16 { left: 71%; background: var(--pink);      animation-duration: 5.1s; animation-delay: -2.3s; --drift: -42px; }
+.confetti-17 { left: 75%; background: var(--pink-deep); animation-duration: 7.0s; animation-delay: -1.6s; --drift:  20px; }
+.confetti-18 { left: 80%; background: var(--gold);      animation-duration: 4.4s; animation-delay: -4.9s; --drift: -33px; }
+.confetti-19 { left: 84%; background: var(--green);     animation-duration: 6.5s; animation-delay: -0.9s; --drift:  48px; }
+.confetti-20 { left: 89%; background: var(--pink);      animation-duration: 5.7s; animation-delay: -3.5s; --drift: -28px; }
+.confetti-21 { left: 93%; background: #FFFFFF;          animation-duration: 6.3s; animation-delay: -1.7s; --drift:  22px; }
+.confetti-22 { left:  6%; background: var(--pink-deep); animation-duration: 5.0s; animation-delay: -4.2s; --drift: -36px; }
+.confetti-23 { left: 19%; background: #FFFFFF;          animation-duration: 6.9s; animation-delay: -2.5s; --drift:  41px; }
+.confetti-24 { left: 33%; background: var(--green);     animation-duration: 4.8s; animation-delay: -5.1s; --drift: -19px; }
+.confetti-25 { left: 46%; background: var(--gold);      animation-duration: 6.6s; animation-delay: -0.2s; --drift:  29px; }
+.confetti-26 { left: 60%; background: var(--pink);      animation-duration: 5.4s; animation-delay: -3.9s; --drift: -48px; }
+.confetti-27 { left: 73%; background: var(--pink-deep); animation-duration: 7.2s; animation-delay: -1.3s; --drift:  16px; }
+.confetti-28 { left: 87%; background: var(--gold);      animation-duration: 4.5s; animation-delay: -4.4s; --drift: -31px; }
+.confetti-29 { left: 96%; background: var(--green);     animation-duration: 5.8s; animation-delay: -2.8s; --drift:  39px; }
+.confetti-30 { left: 50%; background: #FFFFFF;          animation-duration: 6.1s; animation-delay: -5.5s; --drift: -24px; }
+
 /* Prevent iOS zoom on double-tap */
 html { touch-action: manipulation; }
 

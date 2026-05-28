@@ -1392,13 +1392,20 @@
       const isCorrect = i === r.correctIndex;
       const colorVar = ['--tile-1','--tile-2','--tile-3','--tile-4'][i];
       const choiceText = (q.choices && q.choices[i]) || '';
+      // Same escaped string is used in 3 places (element content, the
+      // `title` fallback tooltip, and the `data-full` attribute that
+      // powers the polished CSS hover bubble in host.css). escapeHtml()
+      // covers " and ' so it's safe in both contexts.
+      const choiceEsc = escapeHtml(choiceText);
       const indicator = isCorrect
         ? '<div class="row-indicator correct-check" aria-label="Correct answer">✓</div>'
         : '<div class="row-indicator" aria-hidden="true"></div>';
       return (
         '<div class="bar-row ' + (isCorrect ? 'correct' : '') + '">' +
           '<div class="shape" style="color: var(' + colorVar + ')">' + shapeHTML(i) + '</div>' +
-          '<div class="choice-text">' + escapeHtml(choiceText) + '</div>' +
+          // tabindex=0 lets keyboard users Tab to each row to surface
+          // the tooltip via :focus (mirrors the :hover reveal).
+          '<div class="choice-text" title="' + choiceEsc + '" data-full="' + choiceEsc + '" tabindex="0">' + choiceEsc + '</div>' +
           '<div class="bar"><div class="bar-fill" style="width:' + pct.toFixed(1) + '%; background: var(' + colorVar + ')"></div></div>' +
           '<div class="count">' + count + '</div>' +
           indicator +
