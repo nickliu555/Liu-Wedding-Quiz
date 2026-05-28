@@ -2,57 +2,133 @@
   "questions": [
     {
       "id": "q1",
-      "prompt": "Where did the couple first meet?",
+      "prompt": "What did the couple do on their first date?",
       "choices": [
-        "At a coffee shop",
-        "Through mutual friends",
-        "At university",
-        "On a dating app"
+        "Went to the movies",
+        "Walked in the park",
+        "Did pottery painting",
+        "Got boba"
       ],
       "correctIndex": 3
     },
     {
       "id": "q2",
-      "prompt": "What is the couple's favorite shared hobby?",
+      "prompt": "How quickly did the couple move in together?",
       "choices": [
-        "Hiking",
-        "Cooking together",
-        "Board games",
-        "Sports"
+        "1 month",
+        "3 months",
+        "6 months",
+        "1 year"
+      ],
+      "correctIndex": 1
+    },
+    {
+      "id": "q3",
+      "prompt": "What breed is the couple's dog, Kyushu?",
+      "choices": [
+        "Miniature Poodle",
+        "Cavalier King Charles Spaniel",
+        "Bichon / Shih Tzu mix",
+        "Lhasa Apso / Poodle mix"
       ],
       "correctIndex": 2
     },
     {
-      "id": "q3",
-      "prompt": "Where did they take their first trip together?",
+      "id": "q4",
+      "prompt": "What is Nick's favorite programming language?",
       "choices": [
-        "California",
-        "Florida",
-        "New York",
-        "Japan"
+        "JavaScript",
+        "Python",
+        "C++",
+        "Java"
       ],
-      "correctIndex": 1,
-      "timeLimitSec": 20
+      "correctIndex": 2
     },
     {
-      "id": "q4",
-      "prompt": "What was the name of their first pet together?",
+      "id": "q5",
+      "prompt": "Where does the couple want to go on their honeymoon?",
       "choices": [
-        "Kyushu",
-        "Biscuit",
-        "Luna",
-        "Pepper"
+        "Hawaii",
+        "Mexico",
+        "Japan",
+        "Ireland"
       ],
       "correctIndex": 0
     },
     {
-      "id": "q5",
-      "prompt": "How many years have they been together before getting married?",
+      "id": "q6",
+      "prompt": "What is Carly's favorite Pokémon?",
       "choices": [
-        "1 year",
-        "2 years",
-        "3 years",
-        "4 years"
+        "Psyduck",
+        "Jirachi",
+        "Eevee",
+        "Celebi"
+      ],
+      "correctIndex": 1
+    },
+    {
+      "id": "q7",
+      "prompt": "What is the couple's favorite video game to play together?",
+      "choices": [
+        "Minecraft",
+        "Fortnite",
+        "League of Legends",
+        "Mario Kart"
+      ],
+      "correctIndex": 1
+    },
+    {
+      "id": "q8",
+      "prompt": "What fraternity was Nick in during college?",
+      "choices": [
+        "Sigma Alpha Epsilon",
+        "Phi Kappa Psi",
+        "Sigma Nu",
+        "Beta Upsilon Chi"
+      ],
+      "correctIndex": 3
+    },
+    {
+      "id": "q9",
+      "prompt": "What part of the couple's newly purchased home did they remodel?",
+      "choices": [
+        "Primary bathroom",
+        "Kitchen",
+        "Basement",
+        "Deck"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "id": "q10",
+      "prompt": "What religion was Carly's college thesis paper about?",
+      "choices": [
+        "Catholicism",
+        "Buddhism",
+        "Shintoism",
+        "Islam"
+      ],
+      "correctIndex": 0
+    },
+    {
+      "id": "q11",
+      "prompt": "What special day did the couple get engaged on?",
+      "choices": [
+        "New Year's Eve",
+        "Easter",
+        "Carly's birthday",
+        "Valentine's Day"
+      ],
+      "correctIndex": 3
+    },
+    {
+      "id": "q12",
+      "prompt": "What does Nick often say to Carly before bed?",
+      "choices": [
+        "What is the weather tomorrow?",
+        "Can you fill up my water bottle?",
+        "I'm hungry!",
+        "Can you set my alarm?"
       ],
       "correctIndex": 2
     }
