@@ -1386,10 +1386,17 @@ body.host.host-prompt-only #view-question .question-prompt {
   /* Combine scale-up with a downward shift so the prompt sits closer to
      the optical center of the screen while it's the only thing visible.
      Using transform (vs. margin) keeps the transition smooth and avoids
-     any layout jump when the choices fade in. Note: max-width is the same
-     as the normal state so line wrapping stays identical — transform: scale
-     only changes visual size, not where the text wraps. */
-  transform: translateY(8vh) scale(1.35);
+     any layout jump when the choices fade in.
+
+     IMPORTANT: max-width is intentionally NOT overridden here — it inherits
+     the base .question-prompt value, so the text wraps at the EXACT same
+     point as the shrunken (QUESTION-phase) prompt. That makes the shrink a
+     pure scale animation with no mid-flight reflow → perfectly smooth.
+
+     The scale is kept at 1.22 (not higher) so that the visually-enlarged
+     text (base max-width 72vw × 1.22 ≈ 88vw) still leaves a comfortable
+     left/right margin and never runs to the screen edges. */
+  transform: translateY(8vh) scale(1.22);
 }
 body.host.host-prompt-only #view-question .answer-grid,
 body.host.host-prompt-only #view-question .answers-received,

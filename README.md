@@ -30,24 +30,3 @@ Edit `data/questions.json`. Schema:
 - Optional `image` is served from `/assets/images/` (place files under `assets/images/`).
 
 The server validates the file at boot and exits with a clear error if it's malformed.
-
-## Project layout
-
-```
-server/
-  index.js          Express + Socket.IO bootstrap
-  game.js           Single-room state machine
-  scoring.js        Kahoot-style points formula
-  questions.js      JSON loader + validator
-  profanity.js      Small name blocklist
-  *.test.js         Tiny Node-based unit tests
-data/
-  questions.json    Edit this
-assets/
-  images/           Optional per-question images
-  sounds/           Optional SFX
-public/
-  join.html, player.html, host.html
-  css/              base.css, player.css, host.css
-  js/               join.js, player.js, host.js
-```

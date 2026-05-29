@@ -448,6 +448,49 @@ class Game {
     return typeof limit === 'number' ? ranked.slice(0, limit) : ranked;
   }
 
+  // Flat per-player dump for the CSV export feature. One entry per player,
+  // ordered by final rank (reuses getLeaderboard()'s sort/competition-rank
+  // logic so the spreadsheet rows match the on-screen standings). This is a
+  // PURE READ — it never mutates game state, so it's safe to call at any
+  // time (the host UI only exposes it on the FINAL page).
+  //
+  // Returns:
+  //   {
+  //     questions: [{ id, prompt }, ...],            // column order
+  //     rows: [
+  //       {
+  //         rank, name, score,
+  //         answers: {                               // keyed by question id
+  //           <questionId>: { text, wasCorrect } | null   // null = never answered
+  //         }
+  //       }, ...
+  //     ]
+  //   }
+  getExportData() {
+    const order = this.getLeaderboard(); // ranked rows: { rank, id, name, score }
+    const questions = this.questions.map((q) => ({ id: q.id, prompt: q.prompt }));
+
+    const rows = order.map((entry) => {
+      const player = this.players.get(entry.id);
+      const answers = {};
+      for (const q of this.questions) {
+        const a = player && player.answers.find((x) => x.questionId === q.id);
+        if (!a) {
+          answers[q.id] = null; // player never submitted an answer for this question
+          continue;
+        }
+        const choiceText =
+          (q.choices && q.choices[a.choiceIndex] != null)
+            ? q.choices[a.choiceIndex]
+            : '';
+        answers[q.id] = { text: choiceText, wasCorrect: !!a.wasCorrect };
+      }
+      return { rank: entry.rank, name: entry.name, score: entry.score, answers };
+    });
+
+    return { questions, rows };
+  }
+
   // Top N for the between-question leaderboard panel. Returns:
   //   { rows: <ranked rows, capped at `limit`>,
   //     moreTiedAtLastRank: <how many additional players share the LAST

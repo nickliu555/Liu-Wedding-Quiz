@@ -475,6 +475,19 @@ io.on('connection', (socket) => {
     ack && ack({ ok: true, alreadyRevealed: wasAlreadyRevealed });
   });
 
+  // Host requests the full per-player results dump for CSV export. Read-only
+  // (getExportData() never mutates state). Only honored in FINAL so the
+  // operator can't pull a half-finished game's data, and host-gated so a
+  // player socket can't scrape everyone's answers.
+  socket.on('host:exportResults', (_p, ack) => {
+    if (!requireHost(ack)) return;
+    if (game.phase !== PHASES.FINAL) {
+      return ack && ack({ ok: false, reason: 'not-final' });
+    }
+    const data = game.getExportData();
+    ack && ack({ ok: true, questions: data.questions, rows: data.rows });
+  });
+
   socket.on('host:reset', (_p, ack) => {
     if (!requireHost(ack)) return;
     game.reset();

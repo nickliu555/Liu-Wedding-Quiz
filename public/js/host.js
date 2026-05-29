@@ -151,6 +151,7 @@
   const startAnsweringRow = document.getElementById('startAnsweringRow');
   const revealToPhonesBtn = document.getElementById('revealToPhonesBtn');
   const revealToPhonesRow = document.getElementById('revealToPhonesRow');
+  const exportResultsBtn = document.getElementById('exportResultsBtn');
 
   const sfxLobby = document.getElementById('sfx-lobby');
   const sfxTick = document.getElementById('sfx-tick');
@@ -427,6 +428,93 @@
     });
   }
 
+  // ---------------- Export results to CSV (Google Sheets) ----------------
+  // Lives in the top bar, shown only on the FINAL page (toggled in the
+  // state:final / phase handlers). On click we ask the server for the full
+  // per-player dump and build a CSV the operator can import into Google
+  // Sheets (File → Import). One row per player: Name, each question's
+  // chosen answer (with a ✓/✗ marker), and the final score.
+  function showExportBtn(visible) {
+    if (!exportResultsBtn) return;
+    exportResultsBtn.hidden = !visible;
+  }
+
+  // RFC 4180 field escaping: wrap in double quotes and double any embedded
+  // quotes whenever the value contains a comma, quote, or newline.
+  function csvField(value) {
+    var s = value == null ? '' : String(value);
+    if (/[",\n\r]/.test(s)) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function buildResultsCsv(questions, rows) {
+    var header = ['Rank', 'Name'];
+    questions.forEach(function (q, i) {
+      header.push('Q' + (i + 1) + ': ' + q.prompt);
+    });
+    header.push('Final Score');
+
+    var lines = [header.map(csvField).join(',')];
+
+    rows.forEach(function (row) {
+      var cells = [row.rank, row.name];
+      questions.forEach(function (q) {
+        var a = row.answers ? row.answers[q.id] : null;
+        if (!a) {
+          cells.push(''); // never answered this question
+        } else {
+          cells.push(a.text + (a.wasCorrect ? ' ✓' : ' ✗'));
+        }
+      });
+      cells.push(row.score);
+      lines.push(cells.map(csvField).join(','));
+    });
+
+    // Prepend a UTF-8 BOM so Google Sheets / Excel render the ✓/✗ glyphs
+    // and any accented names correctly on import.
+    return '\ufeff' + lines.join('\r\n');
+  }
+
+  function downloadCsv(filename, csv) {
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Revoke on the next tick so the download has a chance to start.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
+  if (exportResultsBtn) {
+    exportResultsBtn.addEventListener('click', function () {
+      // Keep the button visible and re-clickable the whole time — just
+      // show transient feedback text. We don't disable it (the disabled
+      // dim on a transparent btn-ghost reads as "disappearing"), and the
+      // operator may legitimately want to export more than once.
+      socket.emit('host:exportResults', {}, function (res) {
+        if (!res || !res.ok) {
+          exportResultsBtn.textContent = '⚠ Export failed';
+          setTimeout(function () {
+            exportResultsBtn.textContent = '⬇ Export to Sheets';
+          }, 2500);
+          return;
+        }
+        var csv = buildResultsCsv(res.questions || [], res.rows || []);
+        var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        downloadCsv('wedding-quiz-results-' + stamp + '.csv', csv);
+        exportResultsBtn.textContent = '✓ Exported';
+        setTimeout(function () {
+          exportResultsBtn.textContent = '⬇ Export to Sheets';
+        }, 2500);
+      });
+    });
+  }
+
   // ---------------- Auto-enter on load ----------------
   socket.on('connect', function () {
     socket.emit('host:auth', {}, function (res) {
@@ -459,6 +547,7 @@
     // stale state attached.
     if (startAnsweringRow) startAnsweringRow.hidden = true;
     if (revealToPhonesRow) revealToPhonesRow.hidden = true;
+    showExportBtn(false);
     document.body.classList.remove('host-prompt-only', 'host-announcement-prompt', 'host-prompt-instant', 'host-final-question');
     qTotal.textContent = initial.questionsTotal;
     rTotal.textContent = initial.questionsTotal;
@@ -1827,6 +1916,7 @@
 
   // ---------------- Socket wiring ----------------
   socket.on('state:lobby', function (s) {
+    showExportBtn(false);
     renderLobby(s);
     answersTotal.textContent = s.total;
     // LOBBY is the only phase in which the announcement-mode toggle is
@@ -1839,10 +1929,12 @@
     }
   });
   socket.on('state:question', function (q) {
+    showExportBtn(false);
     setAnnouncementToggleEnabled(false);
     renderQuestion(q);
   });
   socket.on('state:reveal', function (r) {
+    showExportBtn(false);
     setAnnouncementToggleEnabled(false);
     // Play a brief "sting" between QUESTION and REVEAL — matches Kahoot's
     // beat where you hear "Time's up!" (timeout) or "Let's see the
@@ -1872,14 +1964,17 @@
     }
   });
   socket.on('state:final', function (f) {
+    showExportBtn(true);
     setAnnouncementToggleEnabled(false);
     renderFinal(f);
   });
   socket.on('state:intro', function (i) {
+    showExportBtn(false);
     setAnnouncementToggleEnabled(false);
     renderIntro(i);
   });
   socket.on('state:prompt', function (p) {
+    showExportBtn(false);
     setAnnouncementToggleEnabled(false);
     renderPrompt(p);
   });

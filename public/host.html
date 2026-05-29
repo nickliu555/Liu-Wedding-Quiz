@@ -33,6 +33,12 @@
                     data-settings-keep-open title="Mute player reactions">🔔 Reactions</button>
           </div>
         </div>
+        <!-- Export results to CSV (for Google Sheets import). Hidden until
+             the FINAL/podium page; shown by host.js on state:final and
+             re-hidden on every other phase. Works in both announcement
+             modes since it lives in the top bar, not the final-view. -->
+        <button id="exportResultsBtn" class="btn-ghost" type="button"
+                title="Download all players' answers + scores as a CSV" hidden>⬇ Export to Sheets</button>
         <button id="resetBtn" class="btn-ghost" title="Reset the whole game">Reset</button>
       </div>
     </div>
