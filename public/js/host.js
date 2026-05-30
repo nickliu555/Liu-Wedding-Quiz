@@ -500,7 +500,7 @@
         if (!res || !res.ok) {
           exportResultsBtn.textContent = '⚠ Export failed';
           setTimeout(function () {
-            exportResultsBtn.textContent = '⬇ Export to Sheets';
+            exportResultsBtn.textContent = '⬇ Export as CSV';
           }, 2500);
           return;
         }
@@ -509,7 +509,7 @@
         downloadCsv('wedding-quiz-results-' + stamp + '.csv', csv);
         exportResultsBtn.textContent = '✓ Exported';
         setTimeout(function () {
-          exportResultsBtn.textContent = '⬇ Export to Sheets';
+          exportResultsBtn.textContent = '⬇ Export as CSV';
         }, 2500);
       });
     });
