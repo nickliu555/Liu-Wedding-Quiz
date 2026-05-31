@@ -306,6 +306,16 @@
   // enforces this; client disables the toggle UI mid-quiz so the
   // operator can't try.
   let announcementMode = true;
+  // Tracks the host's authoritative game phase ('LOBBY' | 'INTRO' |
+  // 'PROMPT' | 'QUESTION' | 'REVEAL' | 'FINAL'). The server's
+  // `state:lobby` event is really a ROSTER-UPDATE broadcast — it fires on
+  // any guest join/reconnect in *every* phase (a phone refreshing during
+  // the results screen triggers it), so it must NOT be treated as a
+  // genuine "we are now in the lobby" phase change. The true lobby entry
+  // always goes through enterLobby() (auth + reset paths). We keep this
+  // flag so the state:lobby handler can skip lobby-only side effects
+  // (e.g. hiding the Export button) when we're not actually in LOBBY.
+  let currentPhase = null;
   function updateAnnouncementUI() {
     if (announcementToggle) {
       announcementToggle.setAttribute('aria-checked', announcementMode ? 'true' : 'false');
@@ -541,6 +551,7 @@
 
   function enterLobby(initial) {
     show('lobby');
+    currentPhase = 'LOBBY';
     // Defensive cleanup of phase-only UI (announcement-mode "Start
     // answering →" button, prompt-only / announcement-prompt body classes)
     // so a refresh into the lobby is clean even if a previous quiz left
@@ -1916,9 +1927,16 @@
 
   // ---------------- Socket wiring ----------------
   socket.on('state:lobby', function (s) {
-    showExportBtn(false);
+    // `state:lobby` is a roster-update broadcast that fires in EVERY phase
+    // (guest join/reconnect), not just in the lobby. Only apply the
+    // lobby-only UI side effects (hide Export button, re-enable the
+    // announcement toggle, hydrate announcement mode) when we're actually
+    // in the lobby — otherwise a guest refreshing their phone during the
+    // FINAL results screen would wrongly hide the Export button.
     renderLobby(s);
     answersTotal.textContent = s.total;
+    if (currentPhase !== 'LOBBY') return;
+    showExportBtn(false);
     // LOBBY is the only phase in which the announcement-mode toggle is
     // mutable; re-enable it on every LOBBY broadcast so a reset/refresh
     // restores interactivity.
@@ -1929,11 +1947,13 @@
     }
   });
   socket.on('state:question', function (q) {
+    currentPhase = 'QUESTION';
     showExportBtn(false);
     setAnnouncementToggleEnabled(false);
     renderQuestion(q);
   });
   socket.on('state:reveal', function (r) {
+    currentPhase = 'REVEAL';
     showExportBtn(false);
     setAnnouncementToggleEnabled(false);
     // Play a brief "sting" between QUESTION and REVEAL — matches Kahoot's
@@ -1964,16 +1984,19 @@
     }
   });
   socket.on('state:final', function (f) {
+    currentPhase = 'FINAL';
     showExportBtn(true);
     setAnnouncementToggleEnabled(false);
     renderFinal(f);
   });
   socket.on('state:intro', function (i) {
+    currentPhase = 'INTRO';
     showExportBtn(false);
     setAnnouncementToggleEnabled(false);
     renderIntro(i);
   });
   socket.on('state:prompt', function (p) {
+    currentPhase = 'PROMPT';
     showExportBtn(false);
     setAnnouncementToggleEnabled(false);
     renderPrompt(p);

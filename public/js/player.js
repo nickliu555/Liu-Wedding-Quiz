@@ -369,6 +369,21 @@
     );
   }
 
+  // Build the markup for a list of leaderboard rows (rank / name /
+  // score). The current player's own row is flagged with `.is-me` so it
+  // can be visually emphasized (bold + tint). Names are escaped since
+  // they're player-supplied.
+  function lbRowsHtml(entries, meId) {
+    return entries.map(function (e) {
+      var isMe = e.id === meId;
+      return '<div class="lb-row' + (isMe ? ' is-me' : '') + '">' +
+          '<span class="lb-rank">#' + e.rank + '</span>' +
+          '<span class="lb-name">' + escapeHtml(e.name) + '</span>' +
+          '<span class="lb-score">' + e.score + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
   // Build and render the player's personal rank card. Only safe to call
   // when `finalPayload.fullLeaderboard` is populated AND we want the
   // standings revealed (i.e. `state:rankReveal` has fired, or the
@@ -479,7 +494,36 @@
         '<h2 class="serif rank-headline">' + headline + '</h2>' +
         rankLine +
         '<p class="rank-footnote">Thanks for playing! 💕</p>' +
+        '<button type="button" class="top10-toggle btn-ghost" aria-expanded="false">🏆 See Top 10</button>' +
+        '<div class="top10-panel" hidden></div>' +
       '</div>';
+
+    // Wire the collapsible Top 10 panel. The rows are built lazily on the
+    // first expand from the already-cached `fullLeaderboard`, so there's
+    // zero cost until the player actually taps. The card is rebuilt fresh
+    // on every renderPlayerRank() call, so listeners never accumulate.
+    var toggleBtn = elView.querySelector('.top10-toggle');
+    var panel = elView.querySelector('.top10-panel');
+    if (toggleBtn && panel) {
+      var built = false;
+      toggleBtn.addEventListener('click', function () {
+        if (!built) {
+          var html = lbRowsHtml(lb.slice(0, 10), playerId);
+          // If the player finished outside the top 10, append their own
+          // row beneath a divider so they can still see where they landed.
+          if (rank > 10) {
+            html += '<div class="lb-divider" aria-hidden="true"></div>' +
+              lbRowsHtml([me], playerId);
+          }
+          panel.innerHTML = html;
+          built = true;
+        }
+        var isOpen = !panel.hidden;
+        panel.hidden = isOpen;
+        toggleBtn.setAttribute('aria-expanded', String(!isOpen));
+        toggleBtn.textContent = isOpen ? '🏆 See Top 10' : 'Hide Top 10';
+      });
+    }
   }
 
   function renderRejected(reason) {
