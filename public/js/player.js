@@ -198,6 +198,11 @@
   // (default mode renders none of them, so the loop is a no-op).
   function fitAllRowTexts() {
     document.querySelectorAll('.row-text').forEach(function (el) { fitText(el, 11, 18); });
+    // Announcement Mode question header: shrink the prompt (22px..14px) so
+    // the full text always fits its fixed-height box on any phone — never
+    // truncates. No-op in default mode (no .am-question element present).
+    var amq = document.querySelector('.am-question');
+    if (amq) fitText(amq, 14, 22);
   }
   // One-shot resize listener — cheap (4 elements max) and only does real
   // work when row tiles exist in the DOM (in non-Announcement Mode the
@@ -243,12 +248,20 @@
             return '<button class="tile tile-color-' + i + '" data-choice="' + i + '" aria-label="Choice ' + (i+1) + '">' + shape(i) + '</button>';
           }).join('') +
         '</div>');
+    // Announcement Mode: the room may not have a visible host screen, so the
+    // phone shows the question prompt itself (clamped to ~2 lines) above the
+    // choice rows. Default mode keeps "Make your pick" and points players at
+    // the big screen. q.prompt is author-controlled but escaped regardless.
+    const headerMarkup = announcementMode
+      ? ('<p style="color: var(--muted); margin-bottom:4px;">Question ' + (q.index + 1) + ' of ' + q.total + '</p>' +
+         '<div class="am-question serif">' + escapeHtml(q.prompt) + '</div>')
+      : ('<h2 class="serif">Make your pick</h2>' +
+         '<p style="color: var(--muted);">Question ' + (q.index + 1) + ' of ' + q.total + '</p>');
     elView.innerHTML =
       '<div class="state-card">' +
         '<div class="countdown-pill" id="pcountdown">' + timeLeft + 's</div>' +
         '<div class="urgent-bar" id="urgentBar" aria-hidden="true"></div>' +
-        '<h2 class="serif">Make your pick</h2>' +
-        '<p style="color: var(--muted);">Question ' + (q.index + 1) + ' of ' + q.total + '</p>' +
+        headerMarkup +
         tilesMarkup +
       '</div>';
 

@@ -311,6 +311,23 @@ body.join.lobby-closed .join-form {
   flex-direction: column;
   gap: 10px;
 }
+/* Announcement Mode question header on the player's answering screen.
+   The DJ reads the question aloud, but loud rooms / late glances / hard-of-
+   hearing guests need the text too, so we surface q.prompt here. The box is
+   a fixed max-height; player.js's fitText() shrinks the font (22px..14px)
+   until the full prompt fits — so it NEVER truncates, on any phone size,
+   while still never pushing the four fixed 64px choice rows off-screen.
+   Only shown in Announcement Mode (default mode renders the "Make your
+   pick" h2 instead). */
+.am-question {
+  margin: 0 0 6px;
+  max-height: 84px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  word-break: break-word;
+}
 .row-tile {
   display: flex;
   align-items: center;
