@@ -356,8 +356,10 @@ class Game {
       index: this.currentIndex,
       total: this.questions.length,
       prompt: q.prompt,
+      prompt_zh: q.prompt_zh || null,
       image: q.image,
       choices: q.choices,
+      choices_zh: q.choices_zh || null,
       timeLimitSec: q.timeLimitSec,
       serverStartTs: this.currentStartTs,
       endsAt: this.currentEndsAt,
@@ -387,12 +389,14 @@ class Game {
       index: this.currentIndex,
       total: this.questions.length,
       prompt: q.prompt,
+      prompt_zh: q.prompt_zh || null,
       image: q.image,
       // Include the choices so the host can pre-render the answer tiles
       // during the lead-in (kept hidden via CSS) and then smoothly fade
       // them in when QUESTION begins — avoids the visible "pop" you get
       // from inserting fresh DOM nodes at the same moment they transition.
       choices: q.choices,
+      choices_zh: q.choices_zh || null,
       // When this prompt phase ends and the choices appear.
       endsAt: this.currentEndsAt,
       serverNow: Date.now(),
@@ -641,6 +645,7 @@ class Game {
       // pure superset of the previous payload — no contract changes.
       correctIndex: q.correctIndex,
       correctChoice: q.choices[q.correctIndex],
+      correctChoice_zh: q.choices_zh ? q.choices_zh[q.correctIndex] : null,
     };
   }
 

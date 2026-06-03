@@ -149,6 +149,35 @@ body.join.lobby-closed .join-form {
 }
 .player-score { color: var(--green-deep); font-weight: 700; }
 
+/* Compact language toggle (中 / EN). Fixed-width pill so it never crowds the
+   score chip; the player name simply ellipsis-truncates a little sooner.
+   Always shows the language you'd switch TO. */
+.lang-toggle {
+  flex: 0 0 auto;
+  min-width: 38px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--green-deep);
+  background: transparent;
+  color: var(--green-deep);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* DIAGNOSTIC/likely-fix: tap feedback uses opacity instead of transform.
+     A `transform` transition promotes this header button to its own iOS/
+     WebKit compositing layer; a new header layer can prevent the swapped
+     .player-view tile from invalidating, leaving a faint "ghost" of the
+     previous screen. Opacity feedback avoids creating that layer. */
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.1s ease;
+}
+.lang-toggle:active { opacity: 0.55; }
+@media (hover: hover) {
+  .lang-toggle:hover { background: var(--green-deep); color: #fff; }
+}
+
 /* Sage pill with a tiny gold "wedding ring" beside the score number.
    The ring is a CSS-only circle (gold border, cream center) sized to the
    text. A .bumped class triggers a brief scale pop whenever the score

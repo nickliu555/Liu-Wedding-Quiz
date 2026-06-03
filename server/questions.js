@@ -68,11 +68,36 @@ function validateQuestions(data) {
     if (q.image !== undefined && q.image !== null && typeof q.image !== 'string') {
       throw new QuestionsError(`${where}: image must be a string URL/path if provided`);
     }
+    // Optional Simplified-Chinese translations. When present they let the
+    // player phone show the question/answers in Chinese (language toggle).
+    // Both are optional; a missing field simply falls back to English on the
+    // client. If provided they must be well-formed.
+    let promptZh = null;
+    if (q.prompt_zh !== undefined && q.prompt_zh !== null) {
+      if (typeof q.prompt_zh !== 'string' || !q.prompt_zh.trim()) {
+        throw new QuestionsError(`${where}: prompt_zh must be a non-empty string if provided`);
+      }
+      promptZh = q.prompt_zh;
+    }
+    let choicesZh = null;
+    if (q.choices_zh !== undefined && q.choices_zh !== null) {
+      if (!Array.isArray(q.choices_zh) || q.choices_zh.length !== 4) {
+        throw new QuestionsError(`${where}: choices_zh must be an array of exactly 4 strings if provided`);
+      }
+      q.choices_zh.forEach((c, ci) => {
+        if (typeof c !== 'string' || !c.trim()) {
+          throw new QuestionsError(`${where}: choices_zh[${ci}] must be a non-empty string`);
+        }
+      });
+      choicesZh = q.choices_zh.slice();
+    }
     return {
       id: q.id,
       prompt: q.prompt,
+      prompt_zh: promptZh,
       image: q.image || null,
       choices: q.choices.slice(),
+      choices_zh: choicesZh,
       correctIndex: q.correctIndex,
       timeLimitSec,
     };

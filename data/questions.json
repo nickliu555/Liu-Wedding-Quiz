@@ -9,6 +9,13 @@
         "Did pottery painting",
         "Got boba"
       ],
+      "prompt_zh": "这对新人第一次约会做了什么？",
+      "choices_zh": [
+        "去看电影",
+        "在公园散步",
+        "陶艺彩绘",
+        "喝珍珠奶茶"
+      ],
       "correctIndex": 3
     },
     {
@@ -19,6 +26,13 @@
         "3 months",
         "6 months",
         "1 year"
+      ],
+      "prompt_zh": "这对新人多久后开始同居？",
+      "choices_zh": [
+        "1 个月",
+        "3 个月",
+        "6 个月",
+        "1 年"
       ],
       "correctIndex": 1
     },
@@ -31,12 +45,26 @@
         "Bichon / Shih Tzu mix",
         "Lhasa Apso / Poodle mix"
       ],
+      "prompt_zh": "他们的狗狗 Kyushu 是什么品种？",
+      "choices_zh": [
+        "迷你贵宾犬",
+        "查理王小猎犬",
+        "比熊／西施混血",
+        "拉萨／贵宾混血"
+      ],
       "correctIndex": 2
     },
     {
       "id": "q4",
       "prompt": "What is Nick's favorite programming language?",
       "choices": [
+        "JavaScript",
+        "Python",
+        "C++",
+        "Java"
+      ],
+      "prompt_zh": "Nick 最喜欢的编程语言是什么？",
+      "choices_zh": [
         "JavaScript",
         "Python",
         "C++",
@@ -53,6 +81,13 @@
         "Japan",
         "Ireland"
       ],
+      "prompt_zh": "这对新人想去哪里度蜜月？",
+      "choices_zh": [
+        "夏威夷",
+        "墨西哥",
+        "日本",
+        "爱尔兰"
+      ],
       "correctIndex": 0
     },
     {
@@ -63,6 +98,13 @@
         "Jirachi",
         "Eevee",
         "Celebi"
+      ],
+      "prompt_zh": "Carly 最喜欢的宝可梦是哪只？",
+      "choices_zh": [
+        "可达鸭",
+        "基拉祈",
+        "伊布",
+        "时拉比"
       ],
       "correctIndex": 1
     },
@@ -75,12 +117,26 @@
         "League of Legends",
         "Mario Kart"
       ],
+      "prompt_zh": "这对新人最喜欢一起玩的电子游戏是什么？",
+      "choices_zh": [
+        "我的世界",
+        "堡垒之夜",
+        "英雄联盟",
+        "马力欧赛车"
+      ],
       "correctIndex": 1
     },
     {
       "id": "q8",
       "prompt": "What fraternity was Nick in during college?",
       "choices": [
+        "Sigma Alpha Epsilon",
+        "Phi Kappa Psi",
+        "Sigma Nu",
+        "Beta Upsilon Chi"
+      ],
+      "prompt_zh": "Nick 大学时加入了哪个兄弟会？",
+      "choices_zh": [
         "Sigma Alpha Epsilon",
         "Phi Kappa Psi",
         "Sigma Nu",
@@ -97,6 +153,13 @@
         "Basement",
         "Deck"
       ],
+      "prompt_zh": "这对新人翻新了新家的哪个部分？",
+      "choices_zh": [
+        "主卧浴室",
+        "厨房",
+        "地下室",
+        "露台"
+      ],
       "correctIndex": 0
     },
     {
@@ -107,6 +170,13 @@
         "Buddhism",
         "Shintoism",
         "Islam"
+      ],
+      "prompt_zh": "Carly 的大学毕业论文是关于哪个宗教的？",
+      "choices_zh": [
+        "天主教",
+        "佛教",
+        "神道教",
+        "伊斯兰教"
       ],
       "correctIndex": 0
     },
@@ -119,6 +189,13 @@
         "Carly's birthday",
         "Valentine's Day"
       ],
+      "prompt_zh": "这对新人在哪个特别的日子订婚？",
+      "choices_zh": [
+        "跨年夜",
+        "复活节",
+        "Carly 的生日",
+        "情人节"
+      ],
       "correctIndex": 3
     },
     {
@@ -129,6 +206,13 @@
         "Can you fill up my water bottle?",
         "I'm hungry!",
         "Can you set my alarm?"
+      ],
+      "prompt_zh": "Nick 睡前常对 Carly 说什么？",
+      "choices_zh": [
+        "明天天气怎么样？",
+        "你能帮我把水瓶装满吗？",
+        "我饿了！",
+        "你能帮我设个闹钟吗？"
       ],
       "correctIndex": 2
     }

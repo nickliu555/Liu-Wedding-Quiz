@@ -10,6 +10,7 @@
   const elName = document.getElementById('playerName');
   const elScore = document.getElementById('playerScore');
   const elView = document.getElementById('playerView');
+
   // Full-screen confetti overlay. Hidden by default; shown only when the
   // final rank-reveal lands this player in tier 1 (gold). Managed
   // exclusively by renderPlayerRank() / renderRejected() so it can never
@@ -39,6 +40,238 @@
   // first lobby payload arrives.
   let lobbyPlayerCount = null;
 
+  // ---------------- i18n (English / Simplified Chinese) ----------------
+  // The player can flip the whole screen to Simplified Chinese via the
+  // 中/EN toggle in the header. All player-facing copy is funneled through
+  // t(key, ...args) so a single `lang` switch repaints everything. Question
+  // and answer CONTENT is translated separately via the *_zh fields the
+  // server attaches to each question payload (with graceful fallback to the
+  // English fields when a translation is missing).
+  let lang = localStorage.getItem('quiz.lang') === 'zh' ? 'zh' : 'en';
+
+  const I18N = {
+    en: {
+      // Lobby
+      youreIn: "You're in!",
+      waitingLeadAnnounce: 'The quiz will start soon. Follow along with the DJ.',
+      waitingLeadDefault: 'Look up at the big screen. The quiz will start soon.',
+      lobbyCountHtml: function (numSpan, n) { return numSpan + ' ' + (n === 1 ? 'guest' : 'guests') + ' in lobby'; },
+      keepTabOpen: 'Keep this tab open.',
+      // Intro
+      upNext: 'Up next…',
+      getReady: 'Get ready',
+      go: 'Go!',
+      firstQuestionComingUp: 'First question coming up.',
+      // Prompt / question counter
+      questionXofY: function (i, total) { return 'Question ' + i + ' of ' + total; },
+      listenUp: '🎤 Listen up! 🎤',
+      djReadingQuestion: 'The DJ is reading the question.',
+      choicesAppearMoment: 'Choices appear in a moment…',
+      lookUp: 'Look up!',
+      readQuestionBigScreen: 'Read the question on the big screen.',
+      // Question
+      makeYourPick: 'Make your pick',
+      choiceAria: function (n) { return 'Choice ' + n; },
+      choiceLabelAria: function (letter, txt) { return 'Choice ' + letter + ': ' + txt; },
+      // Answer locked
+      answerLockedIn: 'Answer locked in!',
+      waitingForEveryone: 'Waiting for everyone else…',
+      // Result
+      correct: 'Correct! 🎉',
+      notQuite: 'Not quite…',
+      tooSlow: 'Too slow!',
+      noAnswerRecorded: 'No answer recorded.',
+      finalResultsAnnounce: 'Final results coming up — listen to the DJ! 🎤',
+      finalResultsDefault: 'Final results coming up on the big screen…',
+      youAreTiedAt: function (rank) { return 'You are tied at <strong>#' + rank + '</strong>'; },
+      youAre: function (rank) { return 'You are <strong>#' + rank + '</strong>'; },
+      ptsToNextPlace: function (n) { return '↑ ' + n + ' pts to next place'; },
+      correctAnswerAria: function (letter, txt) { return 'Correct answer: ' + letter + ' ' + txt; },
+      // Final / rank reveal
+      thanksForPlaying: 'Thanks for playing! 💕',
+      listenDJWinners: 'Listen to the DJ for the winners!',
+      checkBigScreenWinners: 'Check the big screen for the winners.',
+      tiedForWin: 'Tied for the win!',
+      youWon: 'You won!',
+      silverMedal: 'Silver medal!',
+      bronzeMedal: 'Bronze medal!',
+      greatGame: 'Great game!',
+      tiedAtWinners: function (rank, count) { return 'Tied at <strong>#' + rank + '</strong> (' + count + ' winners)'; },
+      tiedAtPlayers: function (rank, count) { return 'Tied at <strong>#' + rank + '</strong> (' + count + ' players)'; },
+      finishedAt: function (rank) { return 'You finished at <strong>#' + rank + '</strong>'; },
+      seeTop10: '🏆 See Top 10',
+      hideTop10: 'Hide Top 10',
+      // Rejected / disconnect / transient
+      kicked: 'You were removed by the host.',
+      lobbyClosed: 'The quiz has already started.',
+      unknownPlayer: 'Your session was not found. Please rejoin.',
+      reset: 'The host has reset the game.',
+      disconnected: 'Disconnected.',
+      rejoin: 'Rejoin',
+      holdTight: 'Hold tight…',
+      nextQuestionComingUp: 'Next question coming up.',
+      listenToDJ: 'Listen to the DJ!',
+      resultsOnBigScreen: 'Results on the big screen.',
+      reconnecting: 'Reconnecting…',
+      dontRefresh: "Don't refresh.",
+      timesUp: "Time's up!",
+      waitForNextQuestion: 'Wait for the next question.',
+      reactionsPausedByHost: 'Reactions paused by host',
+      // Misc
+      connecting: 'Connecting…',
+      hangTight: 'Hang tight.',
+      secsSuffix: 's',
+      scoreUnit: 'pts',
+    },
+    zh: {
+      youreIn: '你已加入！',
+      waitingLeadAnnounce: '活动即将开始，请跟随 DJ 的引导。',
+      waitingLeadDefault: '请看大屏幕，活动即将开始。',
+      lobbyCountHtml: function (numSpan, n) { return '大厅内有 ' + numSpan + ' 位嘉宾'; },
+      keepTabOpen: '请保持此页面打开。',
+      upNext: '即将开始…',
+      getReady: '准备好',
+      // No trailing fullwidth punctuation here on purpose: the big intro
+      // countdown is centered, and a fullwidth "！" carries built-in
+      // trailing space inside its glyph box that pushes the visible text
+      // left of center. Symmetric CJK glyphs center exactly like the digits.
+      go: '开始',
+      firstQuestionComingUp: '第一题马上开始。',
+      questionXofY: function (i, total) { return '第 ' + i + ' 题 / 共 ' + total + ' 题'; },
+      // No fullwidth "！" before the trailing emoji: it carries built-in
+      // trailing space inside its glyph box, which shows up as an extra gap
+      // before the second 🎤. Dropping it keeps the emoji spacing symmetric.
+      listenUp: '🎤 注意听 🎤',
+      djReadingQuestion: 'DJ 正在朗读题目。',
+      choicesAppearMoment: '选项马上出现…',
+      lookUp: '抬头看！',
+      readQuestionBigScreen: '请看大屏幕上的题目。',
+      makeYourPick: '请选择你的答案',
+      choiceAria: function (n) { return '选项 ' + n; },
+      choiceLabelAria: function (letter, txt) { return '选项 ' + letter + '：' + txt; },
+      answerLockedIn: '答案已锁定！',
+      waitingForEveryone: '等待其他人作答…',
+      correct: '答对了！🎉',
+      notQuite: '差一点…',
+      tooSlow: '太慢了！',
+      noAnswerRecorded: '未记录答案。',
+      finalResultsAnnounce: '最终结果即将揭晓——请听 DJ 宣布！🎤',
+      finalResultsDefault: '最终结果即将在大屏幕揭晓…',
+      youAreTiedAt: function (rank) { return '你并列第 <strong>' + rank + '</strong> 名'; },
+      youAre: function (rank) { return '你目前第 <strong>' + rank + '</strong> 名'; },
+      ptsToNextPlace: function (n) { return '↑ 还差 ' + n + ' 分进入下一名次'; },
+      correctAnswerAria: function (letter, txt) { return '正确答案：' + letter + ' ' + txt; },
+      thanksForPlaying: '感谢参与！💕',
+      listenDJWinners: '请听 DJ 宣布获胜者！',
+      checkBigScreenWinners: '请看大屏幕查看获胜者。',
+      tiedForWin: '并列冠军',
+      youWon: '你赢了',
+      silverMedal: '银牌',
+      bronzeMedal: '铜牌',
+      greatGame: '玩得真棒',
+      tiedAtWinners: function (rank, count) { return '并列第 <strong>' + rank + '</strong> 名（' + count + ' 位冠军）'; },
+      tiedAtPlayers: function (rank, count) { return '并列第 <strong>' + rank + '</strong> 名（' + count + ' 位玩家）'; },
+      finishedAt: function (rank) { return '你最终排名第 <strong>' + rank + '</strong> 名'; },
+      seeTop10: '🏆 查看前十名',
+      hideTop10: '隐藏前十名',
+      kicked: '你已被主持人移出。',
+      lobbyClosed: '活动已经开始了。',
+      unknownPlayer: '未找到你的会话，请重新加入。',
+      reset: '主持人已重置游戏。',
+      disconnected: '已断开连接。',
+      rejoin: '重新加入',
+      holdTight: '请稍候…',
+      nextQuestionComingUp: '下一题马上开始。',
+      listenToDJ: '请听 DJ！',
+      resultsOnBigScreen: '结果在大屏幕上。',
+      reconnecting: '正在重新连接…',
+      dontRefresh: '请勿刷新。',
+      timesUp: '时间到！',
+      waitForNextQuestion: '请等待下一题。',
+      reactionsPausedByHost: '主持人已暂停表情互动',
+      connecting: '正在连接…',
+      hangTight: '请稍候。',
+      secsSuffix: '秒',
+      scoreUnit: '分',
+    },
+  };
+
+  // Translate a key. Trailing args are forwarded to function-valued
+  // entries (for interpolated strings). Falls back to English, then the
+  // raw key, so a missing translation degrades gracefully instead of
+  // rendering "undefined".
+  function t(key) {
+    const table = I18N[lang] || I18N.en;
+    let val = table[key];
+    if (val === undefined) val = I18N.en[key];
+    if (val === undefined) return key;
+    if (typeof val === 'function') {
+      return val.apply(null, Array.prototype.slice.call(arguments, 1));
+    }
+    return val;
+  }
+
+  // Pick the Chinese variant of question content when zh is active and a
+  // translation exists; otherwise fall back to the English field. Keeps
+  // every render site a one-liner and guarantees no blank/undefined text.
+  function qPrompt(q) {
+    return (lang === 'zh' && q && q.prompt_zh) ? q.prompt_zh : (q ? q.prompt : '');
+  }
+  function qChoice(q, i) {
+    if (lang === 'zh' && q && Array.isArray(q.choices_zh) && q.choices_zh[i] != null) {
+      return q.choices_zh[i];
+    }
+    return (q && q.choices && q.choices[i] != null) ? q.choices[i] : '';
+  }
+
+  // Last top-level screen render, captured so the language toggle can
+  // repaint the current view in the newly selected language. Each
+  // top-level render function sets this to a zero-arg closure that
+  // re-invokes it with its original payload.
+  let lastRender = null;
+  function rerender() {
+    if (typeof lastRender === 'function') lastRender();
+  }
+
+  // Apply `lang` to the chrome that lives outside the dynamic state-card:
+  // the <html lang> attribute (accessibility / font hinting), the score
+  // unit label, and the toggle button face (which always shows the language
+  // you'd switch TO). Safe to call repeatedly.
+  const elScoreUnit = document.getElementById('scoreUnit');
+  const elLangToggle = document.getElementById('langToggle');
+  function applyLangChrome() {
+    try { document.documentElement.lang = (lang === 'zh' ? 'zh-Hans' : 'en'); } catch (_) {}
+    if (elScoreUnit) elScoreUnit.textContent = t('scoreUnit');
+    if (elLangToggle) {
+      // Show the target language on the button face.
+      elLangToggle.textContent = lang === 'zh' ? 'EN' : '中';
+      elLangToggle.setAttribute(
+        'aria-label',
+        lang === 'zh' ? 'Switch to English' : '切换到中文 (Switch to Chinese)'
+      );
+    }
+  }
+  if (elLangToggle) {
+    elLangToggle.addEventListener('click', function () {
+      lang = (lang === 'zh' ? 'en' : 'zh');
+      try { localStorage.setItem('quiz.lang', lang); } catch (_) {}
+      applyLangChrome();
+      // Repaint the current screen in the newly selected language.
+      rerender();
+    });
+  }
+  applyLangChrome();
+  // Localize the initial static "Connecting…" card for a returning Chinese
+  // user so it doesn't flash English before the socket connects. The
+  // reconnect ack replaces this card moments later regardless.
+  if (lang === 'zh') {
+    const initialCard = document.getElementById('stateCard');
+    if (initialCard) {
+      initialCard.innerHTML =
+        '<h2>' + t('connecting') + '</h2><p>' + t('hangTight') + '</p>';
+    }
+  }
+
   // ---------------- Rendering ----------------
   function render(html) {
     elView.innerHTML = '<div class="state-card">' + html + '</div>';
@@ -63,18 +296,20 @@
   }
 
   function renderLobbyWaiting() {
+    lastRender = renderLobbyWaiting;
     const waitingLead = announcementMode
-      ? 'The quiz will start soon. Follow along with the DJ.'
-      : 'Look up at the big screen. The quiz will start soon.';
+      ? t('waitingLeadAnnounce')
+      : t('waitingLeadDefault');
     const lobbyCountLine =
       announcementMode && typeof lobbyPlayerCount === 'number'
         ? ('<p class="waiting-lobby-count">' +
-            '<span class="waiting-lobby-count-num">' + lobbyPlayerCount + '</span> ' +
-            (lobbyPlayerCount === 1 ? 'guest' : 'guests') + ' in lobby' +
+            t('lobbyCountHtml',
+              '<span class="waiting-lobby-count-num">' + lobbyPlayerCount + '</span>',
+              lobbyPlayerCount) +
           '</p>')
         : '';
     render(
-      '<h2 class="serif">You\'re in!</h2>' +
+      '<h2 class="serif">' + t('youreIn') + '</h2>' +
       '<p>' + waitingLead + '</p>' +
       '<div class="waiting-pulse" aria-hidden="true">' +
         '<span class="waiting-pulse-ring"></span>' +
@@ -82,7 +317,7 @@
         '<span class="waiting-pulse-heart">♥</span>' +
       '</div>' +
       lobbyCountLine +
-      '<p style="margin-top:14px; color: var(--muted); font-size: 14px;">Keep this tab open.</p>'
+      '<p style="margin-top:14px; color: var(--muted); font-size: 14px;">' + t('keepTabOpen') + '</p>'
     );
     // Reveal the ambient petal drift only while the player is parked here.
     document.body.classList.add('player-waiting');
@@ -99,22 +334,28 @@
     if (introTimer) { clearInterval(introTimer); introTimer = null; }
   }
   function renderIntro(payload) {
+    lastRender = function () { renderIntro(payload); };
     stopIntroTimer();
-    if (payload && typeof payload.serverNow === 'number') {
+    // Only re-sync the clock the first time we see this payload. A language
+    // toggle replays the same (now stale) payload via rerender(); recomputing
+    // clockOffset from a stale serverNow would shift the clock backward and
+    // reset the visible countdown. The __clockSynced flag makes it idempotent.
+    if (payload && typeof payload.serverNow === 'number' && !payload.__clockSynced) {
       clockOffset = payload.serverNow - Date.now();
+      payload.__clockSynced = true;
     }
     const endsAt = (payload && payload.endsAt) || (Date.now() + 5000);
     elView.innerHTML =
       '<div class="state-card intro-card">' +
-        '<div class="intro-hint">Up next…</div>' +
-        '<h2 class="serif intro-title">Get ready</h2>' +
+        '<div class="intro-hint">' + t('upNext') + '</div>' +
+        '<h2 class="serif intro-title">' + t('getReady') + '</h2>' +
         '<div class="intro-countdown" id="pIntroCountdown">5</div>' +
-        '<p>First question coming up.</p>' +
+        '<p>' + t('firstQuestionComingUp') + '</p>' +
       '</div>';
     const el = document.getElementById('pIntroCountdown');
     function tick() {
       const left = Math.max(0, Math.ceil((endsAt - serverNow()) / 1000));
-      if (el) el.textContent = left <= 0 ? 'Go!' : String(left);
+      if (el) el.textContent = left <= 0 ? t('go') : String(left);
       if (left <= 0) stopIntroTimer();
     }
     tick();
@@ -129,29 +370,34 @@
   // direct the player's attention to the DJ instead (the room may not
   // have a visible host screen).
   function renderPrompt(p) {
+    lastRender = function () { renderPrompt(p); };
     stopCountdown();
     stopIntroTimer();
     currentQuestion = null;
     answeredQuestionId = null;
-    if (p && typeof p.serverNow === 'number') {
+    // Only re-sync the clock on the first render of this payload. A language
+    // toggle replays the same (now stale) payload via rerender(); recomputing
+    // clockOffset from a stale serverNow would shift the clock backward.
+    if (p && typeof p.serverNow === 'number' && !p.__clockSynced) {
       clockOffset = p.serverNow - Date.now();
+      p.__clockSynced = true;
     }
     if (announcementMode) {
       elView.innerHTML =
         '<div class="state-card prompt-card">' +
-          '<div class="intro-hint">Question ' + (p.index + 1) + ' of ' + p.total + '</div>' +
-          '<h2 class="serif">🎤 Listen up! 🎤</h2>' +
-          '<p>The DJ is reading the question.</p>' +
-          '<p style="margin-top:10px; color: var(--muted); font-size: 14px;">Choices appear in a moment…</p>' +
+          '<div class="intro-hint">' + t('questionXofY', p.index + 1, p.total) + '</div>' +
+          '<h2 class="serif">' + t('listenUp') + '</h2>' +
+          '<p>' + t('djReadingQuestion') + '</p>' +
+          '<p style="margin-top:10px; color: var(--muted); font-size: 14px;">' + t('choicesAppearMoment') + '</p>' +
         '</div>';
       return;
     }
     elView.innerHTML =
       '<div class="state-card prompt-card">' +
-        '<div class="intro-hint">Question ' + (p.index + 1) + ' of ' + p.total + '</div>' +
-        '<h2 class="serif">Look up!</h2>' +
-        '<p>Read the question on the big screen.</p>' +
-        '<p style="margin-top:10px; color: var(--muted); font-size: 14px;">Choices appear in a moment…</p>' +
+        '<div class="intro-hint">' + t('questionXofY', p.index + 1, p.total) + '</div>' +
+        '<h2 class="serif">' + t('lookUp') + '</h2>' +
+        '<p>' + t('readQuestionBigScreen') + '</p>' +
+        '<p style="margin-top:10px; color: var(--muted); font-size: 14px;">' + t('choicesAppearMoment') + '</p>' +
       '</div>';
   }
 
@@ -217,9 +463,17 @@
   function serverNow() { return Date.now() + clockOffset; }
 
   function renderQuestion(q) {
+    lastRender = function () { renderQuestion(q); };
     currentQuestion = q;
     answeredQuestionId = null;
-    if (typeof q.serverNow === 'number') clockOffset = q.serverNow - Date.now();
+    // Only re-sync the clock on the first render of this payload. A language
+    // toggle replays the same (now stale) payload via rerender(); recomputing
+    // clockOffset from a stale serverNow would shift the clock backward and
+    // reset the visible countdown. The __clockSynced flag makes it idempotent.
+    if (typeof q.serverNow === 'number' && !q.__clockSynced) {
+      clockOffset = q.serverNow - Date.now();
+      q.__clockSynced = true;
+    }
     const timeLeft = Math.max(0, Math.ceil((q.endsAt - serverNow()) / 1000));
     // Announcement Mode: the room may not see the host screen at all, so
     // the player phone has to be self-contained for choice text. Swap the
@@ -231,13 +485,13 @@
     const tilesMarkup = announcementMode
       ? ('<div class="tiles tiles-rows" id="pTiles">' +
           [0,1,2,3].map(function (i) {
-            const txt = (q.choices && q.choices[i] != null) ? q.choices[i] : '';
+            const txt = qChoice(q, i);
             // tile-color-N is added to BOTH the row and the badge: badge
             // gets the solid saturated color, row gets a soft tint via the
             // higher-specificity `.row-tile.tile-color-N` rule in player.css
             // (which beats the single-class base.css rule painting the
             // badge solid).
-            return '<button class="row-tile tile-color-' + i + '" data-choice="' + i + '" aria-label="Choice ' + CHOICE_LETTERS[i] + ': ' + escapeHtml(txt) + '">' +
+            return '<button class="row-tile tile-color-' + i + '" data-choice="' + i + '" aria-label="' + escapeHtml(t('choiceLabelAria', CHOICE_LETTERS[i], txt)) + '">' +
               '<span class="row-badge tile-color-' + i + '">' + shape(i) + '</span>' +
               '<span class="row-text">' + escapeHtml(txt) + '</span>' +
             '</button>';
@@ -245,7 +499,7 @@
         '</div>')
       : ('<div class="tiles" id="pTiles">' +
           [0,1,2,3].map(function (i) {
-            return '<button class="tile tile-color-' + i + '" data-choice="' + i + '" aria-label="Choice ' + (i+1) + '">' + shape(i) + '</button>';
+            return '<button class="tile tile-color-' + i + '" data-choice="' + i + '" aria-label="' + escapeHtml(t('choiceAria', i + 1)) + '">' + shape(i) + '</button>';
           }).join('') +
         '</div>');
     // Announcement Mode: the room may not have a visible host screen, so the
@@ -253,13 +507,13 @@
     // choice rows. Default mode keeps "Make your pick" and points players at
     // the big screen. q.prompt is author-controlled but escaped regardless.
     const headerMarkup = announcementMode
-      ? ('<p style="color: var(--muted); margin-bottom:4px;">Question ' + (q.index + 1) + ' of ' + q.total + '</p>' +
-         '<div class="am-question serif">' + escapeHtml(q.prompt) + '</div>')
-      : ('<h2 class="serif">Make your pick</h2>' +
-         '<p style="color: var(--muted);">Question ' + (q.index + 1) + ' of ' + q.total + '</p>');
+      ? ('<p style="color: var(--muted); margin-bottom:4px;">' + t('questionXofY', q.index + 1, q.total) + '</p>' +
+         '<div class="am-question serif">' + escapeHtml(qPrompt(q)) + '</div>')
+      : ('<h2 class="serif">' + t('makeYourPick') + '</h2>' +
+         '<p style="color: var(--muted);">' + t('questionXofY', q.index + 1, q.total) + '</p>');
     elView.innerHTML =
       '<div class="state-card">' +
-        '<div class="countdown-pill" id="pcountdown">' + timeLeft + 's</div>' +
+        '<div class="countdown-pill" id="pcountdown">' + timeLeft + t('secsSuffix') + '</div>' +
         '<div class="urgent-bar" id="urgentBar" aria-hidden="true"></div>' +
         headerMarkup +
         tilesMarkup +
@@ -284,23 +538,25 @@
   }
 
   function renderAnswerLocked(choiceIndex) {
+    lastRender = function () { renderAnswerLocked(choiceIndex); };
     elView.innerHTML =
       '<div class="state-card">' +
-        '<h2 class="serif">Answer locked in!</h2>' +
+        '<h2 class="serif">' + t('answerLockedIn') + '</h2>' +
         '<div style="font-size: 56px; margin: 14px 0; color: white; display:inline-flex; align-items:center; justify-content:center; width:120px; height:120px; border-radius: 20px;" class="tile-color-' + choiceIndex + '">' + shape(choiceIndex) + '</div>' +
-        '<p>Waiting for everyone else…</p>' +
+        '<p>' + t('waitingForEveryone') + '</p>' +
       '</div>';
   }
 
   function renderResult(res) {
+    lastRender = function () { renderResult(res); };
     const correct = res.wasCorrect;
     const pts = res.pointsEarned;
     const rank = res.rank;
     const pointsToNextPlace = res.pointsToNextPlace;
     const klass = correct ? 'result-correct' : 'result-wrong';
     const heading = res.answered
-      ? (correct ? 'Correct! 🎉' : 'Not quite…')
-      : 'Too slow!';
+      ? (correct ? t('correct') : t('notQuite'))
+      : t('tooSlow');
     // Announcement Mode: render a non-interactive copy of the correct
     // row tile (same Duolingo-style row from the question page — colored
     // border, badge, answer text). Shown regardless of whether the
@@ -311,13 +567,17 @@
     const showAnswer = announcementMode
       && typeof res.correctIndex === 'number'
       && typeof res.correctChoice === 'string';
+    // Prefer the Chinese answer text when zh is active and present.
+    const correctText = (lang === 'zh' && res.correctChoice_zh)
+      ? res.correctChoice_zh
+      : res.correctChoice;
     const answerMarkup = showAnswer
       ? ('<div class="result-answer-wrap">' +
            '<div class="row-tile row-tile-display" ' +
                 'role="img" ' +
-                'aria-label="Correct answer: ' + CHOICE_LETTERS[res.correctIndex] + ' ' + escapeHtml(res.correctChoice) + '">' +
+                'aria-label="' + escapeHtml(t('correctAnswerAria', CHOICE_LETTERS[res.correctIndex], correctText)) + '">' +
              '<span class="row-badge" aria-hidden="true">' + shape(res.correctIndex) + '</span>' +
-             '<span class="row-text">' + escapeHtml(res.correctChoice) + '</span>' +
+             '<span class="row-text">' + escapeHtml(correctText) + '</span>' +
              '<span class="row-check" aria-hidden="true">✓</span>' +
            '</div>' +
          '</div>')
@@ -328,7 +588,7 @@
         '<h2 class="serif ' + klass + '">' + heading + '</h2>' +
         (res.answered
           ? '<div class="result-points ' + klass + '">+' + pts + '</div>'
-          : '<p>No answer recorded.</p>') +
+          : '<p>' + t('noAnswerRecorded') + '</p>') +
         // Hide the rank on the very last question — the host's podium reveal
         // is about to drop and we don't want to spoil the standings. In
         // Announcement Mode the host doesn't auto-reveal (the operator has
@@ -336,13 +596,13 @@
         // the host screen at all, so we point the player at the DJ instead.
         (res.isLastQuestion
           ? (announcementMode
-              ? '<p class="result-rank">Final results coming up — listen to the DJ! 🎤</p>'
-              : '<p class="result-rank">Final results coming up on the big screen…</p>')
+              ? '<p class="result-rank">' + t('finalResultsAnnounce') + '</p>'
+              : '<p class="result-rank">' + t('finalResultsDefault') + '</p>')
           : (res.tied
-              ? '<p class="result-rank">You are tied at <strong>#' + rank + '</strong></p>'
-              : '<p class="result-rank">You are <strong>#' + rank + '</strong></p>')) +
+              ? '<p class="result-rank">' + t('youAreTiedAt', rank) + '</p>'
+              : '<p class="result-rank">' + t('youAre', rank) + '</p>')) +
         (showNextPlace
-          ? '<p class="result-next-place">↑ ' + pointsToNextPlace + ' pts to next place</p>'
+          ? '<p class="result-next-place">' + t('ptsToNextPlace', pointsToNextPlace) + '</p>'
           : '') +
         answerMarkup +
       '</div>';
@@ -361,6 +621,7 @@
   let finalPayload = null;
 
   function renderFinal(f) {
+    lastRender = function () { renderFinal(f); };
     // Stash whatever the server sent so renderPlayerRank() can use it
     // when the rank-reveal signal arrives (or right now, if the host
     // already finished its podium reveal — i.e. on a refresh during the
@@ -375,10 +636,10 @@
     // card. This keeps the standings off the player phone until the
     // room has seen them on the big screen.
     render(
-      '<h2 class="serif">Thanks for playing! 💕</h2>' +
+      '<h2 class="serif">' + t('thanksForPlaying') + '</h2>' +
       (announcementMode
-        ? '<p>Listen to the DJ for the winners!</p>'
-        : '<p>Check the big screen for the winners.</p>')
+        ? '<p>' + t('listenDJWinners') + '</p>'
+        : '<p>' + t('checkBigScreenWinners') + '</p>')
     );
   }
 
@@ -402,6 +663,7 @@
   // standings revealed (i.e. `state:rankReveal` has fired, or the
   // reconnect ack told us `podiumRevealed: true`).
   function renderPlayerRank() {
+    lastRender = renderPlayerRank;
     // Default to no confetti at every entry point. The tier-1 branch
     // below explicitly opts in; every other branch (placeholder, missing
     // player, non-gold tier) inherits this safe default. Set first so
@@ -412,10 +674,10 @@
       // signaling rank reveal, but if something raced just fall back to
       // the placeholder copy so the player isn't staring at a blank view.
       render(
-        '<h2 class="serif">Thanks for playing! 💕</h2>' +
+        '<h2 class="serif">' + t('thanksForPlaying') + '</h2>' +
         (announcementMode
-          ? '<p>Listen to the DJ for the winners!</p>'
-          : '<p>Check the big screen for the winners.</p>')
+          ? '<p>' + t('listenDJWinners') + '</p>'
+          : '<p>' + t('checkBigScreenWinners') + '</p>')
       );
       return;
     }
@@ -426,10 +688,10 @@
       // somehow stripped from game.players before final. Show a generic
       // "thanks" without inventing a rank.
       render(
-        '<h2 class="serif">Thanks for playing! 💕</h2>' +
+        '<h2 class="serif">' + t('thanksForPlaying') + '</h2>' +
         (announcementMode
-          ? '<p>Listen to the DJ for the winners!</p>'
-          : '<p>Check the big screen for the winners.</p>')
+          ? '<p>' + t('listenDJWinners') + '</p>'
+          : '<p>' + t('checkBigScreenWinners') + '</p>')
       );
       return;
     }
@@ -465,25 +727,25 @@
     // is the truth; the field size is not part of the per-player brag.
     if (tier === 1) {
       medal = '🥇';
-      headline = tied ? 'Tied for the win!' : 'You won!';
+      headline = tied ? t('tiedForWin') : t('youWon');
       rankLine = tied
-        ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' winners)</p>'
-        : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
+        ? '<p class="rank-tied-count">' + t('tiedAtWinners', rank, tieCount) + '</p>'
+        : '<p class="rank-tied-count">' + t('finishedAt', rank) + '</p>';
       // Winner-only: kick off the falling confetti overlay. Hidden in
       // every other tier (and reset to hidden at the top of this fn).
       if (elConfetti) elConfetti.hidden = false;
     } else if (tier === 2) {
       medal = '🥈';
-      headline = 'Silver medal!';
+      headline = t('silverMedal');
       rankLine = tied
-        ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' players)</p>'
-        : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
+        ? '<p class="rank-tied-count">' + t('tiedAtPlayers', rank, tieCount) + '</p>'
+        : '<p class="rank-tied-count">' + t('finishedAt', rank) + '</p>';
     } else if (tier === 3) {
       medal = '🥉';
-      headline = 'Bronze medal!';
+      headline = t('bronzeMedal');
       rankLine = tied
-        ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' players)</p>'
-        : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
+        ? '<p class="rank-tied-count">' + t('tiedAtPlayers', rank, tieCount) + '</p>'
+        : '<p class="rank-tied-count">' + t('finishedAt', rank) + '</p>';
     } else {
       // Off the podium — give the card the same 4-element rhythm as the
       // podium tiers (medal slot, headline, rank line, footnote) so it
@@ -493,10 +755,10 @@
       // pattern the podium tiers use — including the "(N players)" tie
       // count for consistency.
       medal = '🎉';
-      headline = 'Great game!';
+      headline = t('greatGame');
       rankLine = tied
-        ? '<p class="rank-tied-count">Tied at <strong>#' + rank + '</strong> (' + tieCount + ' players)</p>'
-        : '<p class="rank-tied-count">You finished at <strong>#' + rank + '</strong></p>';
+        ? '<p class="rank-tied-count">' + t('tiedAtPlayers', rank, tieCount) + '</p>'
+        : '<p class="rank-tied-count">' + t('finishedAt', rank) + '</p>';
     }
     // Score is already shown in the sticky top bar chip; no need to
     // repeat it here.
@@ -506,8 +768,8 @@
         (medal ? '<div class="rank-medal" aria-hidden="true">' + medal + '</div>' : '') +
         '<h2 class="serif rank-headline">' + headline + '</h2>' +
         rankLine +
-        '<p class="rank-footnote">Thanks for playing! 💕</p>' +
-        '<button type="button" class="top10-toggle btn-ghost" aria-expanded="false">🏆 See Top 10</button>' +
+        '<p class="rank-footnote">' + t('thanksForPlaying') + '</p>' +
+        '<button type="button" class="top10-toggle btn-ghost" aria-expanded="false">' + t('seeTop10') + '</button>' +
         '<div class="top10-panel" hidden></div>' +
       '</div>';
 
@@ -534,12 +796,13 @@
         var isOpen = !panel.hidden;
         panel.hidden = isOpen;
         toggleBtn.setAttribute('aria-expanded', String(!isOpen));
-        toggleBtn.textContent = isOpen ? '🏆 See Top 10' : 'Hide Top 10';
+        toggleBtn.textContent = isOpen ? t('seeTop10') : t('hideTop10');
       });
     }
   }
 
   function renderRejected(reason) {
+    lastRender = function () { renderRejected(reason); };
     setReactionsAllowed(false);
     // Player is no longer in the game — hide the bar entirely.
     if (reactionBar) reactionBar.hidden = true;
@@ -548,11 +811,11 @@
     // otherwise sit on the rejoin card with confetti still falling.
     if (elConfetti) elConfetti.hidden = true;
     const msg = {
-      'kicked': 'You were removed by the host.',
-      'lobby-closed': 'The quiz has already started.',
-      'unknown-player': 'Your session was not found. Please rejoin.',
-      'reset': 'The host has reset the game.',
-    }[reason] || 'Disconnected.';
+      'kicked': t('kicked'),
+      'lobby-closed': t('lobbyClosed'),
+      'unknown-player': t('unknownPlayer'),
+      'reset': t('reset'),
+    }[reason] || t('disconnected');
     // Stash the previous name only for reasons where it makes sense to
     // pre-fill the join form (e.g. host reset). Never carry the name
     // forward when the player was kicked.
@@ -565,7 +828,7 @@
     elView.innerHTML =
       '<div class="state-card">' +
         '<h2 class="serif">' + msg + '</h2>' +
-        '<button class="btn-primary" style="margin-top: 16px;" onclick="localStorage.removeItem(\'quiz.playerId\'); localStorage.removeItem(\'quiz.playerName\'); window.location.replace(\'/join\');">Rejoin</button>' +
+        '<button class="btn-primary" style="margin-top: 16px;" onclick="localStorage.removeItem(\'quiz.playerId\'); localStorage.removeItem(\'quiz.playerName\'); window.location.replace(\'/join\');">' + t('rejoin') + '</button>' +
       '</div>';
   }
 
@@ -600,7 +863,7 @@
       const left = Math.ceil(msLeftPrecise / 1000);
       if (left !== lastShown) {
         lastShown = left;
-        el.textContent = left + 's';
+        el.textContent = left + t('secsSuffix');
 
         // Subtle "you haven't answered yet" cues — only fire while the
         // player still hasn't submitted for this question.
@@ -663,8 +926,8 @@
           answeredQuestionId = currentQuestion.id; // don't re-open
           elView.innerHTML =
             '<div class="state-card">' +
-              '<h2 class="serif">Time\'s up!</h2>' +
-              '<p>Wait for the next question.</p>' +
+              '<h2 class="serif">' + t('timesUp') + '</h2>' +
+              '<p>' + t('waitForNextQuestion') + '</p>' +
             '</div>';
         } else {
           answeredQuestionId = null;
@@ -735,11 +998,11 @@
     reactionBtns.forEach(function (b) { b.disabled = disabled; });
     if (reactionsMutedByHost && reactionsAllowed) {
       reactionCooldownEl.hidden = false;
-      reactionCooldownEl.textContent = 'Reactions paused by host';
+      reactionCooldownEl.textContent = t('reactionsPausedByHost');
     } else if (onCooldown && reactionsAllowed) {
       const sec = Math.ceil((reactionUntilMs - now) / 1000);
       reactionCooldownEl.hidden = false;
-      reactionCooldownEl.textContent = sec + 's';
+      reactionCooldownEl.textContent = sec + t('secsSuffix');
     } else {
       reactionCooldownEl.hidden = true;
     }
@@ -844,7 +1107,8 @@
           // the player was looking at before they refreshed.
           renderResult(res.myResult);
         } else {
-          render('<h2 class="serif">Hold tight…</h2><p>Next question coming up.</p>');
+          lastRender = null;
+          render('<h2 class="serif">' + t('holdTight') + '</h2><p>' + t('nextQuestionComingUp') + '</p>');
         }
       }
       else if (res.phase === 'FINAL') {
@@ -937,10 +1201,11 @@
     if (rejected) return;
     setReactionsAllowed(true);
     if (!lastResult || (currentQuestion && lastResult.questionId !== currentQuestion.id)) {
-      render('<h2 class="serif">Hold tight…</h2>' +
+      lastRender = applyReveal;
+      render('<h2 class="serif">' + t('holdTight') + '</h2>' +
         (announcementMode
-          ? '<p>Listen to the DJ!</p>'
-          : '<p>Results on the big screen.</p>'));
+          ? '<p>' + t('listenToDJ') + '</p>'
+          : '<p>' + t('resultsOnBigScreen') + '</p>'));
     }
     if (pendingResult) {
       var res = pendingResult;
@@ -961,7 +1226,7 @@
     // .urgent class on the pill so it stays red at 0s.
     var pill = document.getElementById('pcountdown');
     if (pill) {
-      pill.textContent = '0s';
+      pill.textContent = '0' + t('secsSuffix');
       pill.classList.add('urgent');
     }
     document.body.classList.remove('urgent');
@@ -1055,6 +1320,7 @@
 
   socket.on('disconnect', function () {
     if (rejected) return;
-    render('<h2 class="serif">Reconnecting…</h2><p>Don\'t refresh.</p>');
+    lastRender = null;
+    render('<h2 class="serif">' + t('reconnecting') + '</h2><p>' + t('dontRefresh') + '</p>');
   });
 })();
