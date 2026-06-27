@@ -716,8 +716,30 @@ body.player.urgent .urgent-bar {
 .confetti-29 { left: 96%; background: var(--green);     animation-duration: 5.8s; animation-delay: -2.8s; --drift:  39px; }
 .confetti-30 { left: 50%; background: #FFFFFF;          animation-duration: 6.1s; animation-delay: -5.5s; --drift: -24px; }
 
-/* Prevent iOS zoom on double-tap */
+/* ---- App-like touch behavior (player screen only) ----
+   Make the player page feel like a native app rather than a web page:
+   - touch-action: manipulation kills the double-tap-to-zoom gesture
+     (and the 300ms tap delay) everywhere on the page.
+   - user-select / -webkit-user-select: none stops text from being
+     highlighted via long-press or drag.
+   - -webkit-touch-callout: none stops the iOS long-press "callout"
+     menu (copy / share / look up) from popping up. */
 html { touch-action: manipulation; }
+body.player,
+body.player * {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* Re-enable selection + the native callout inside text fields so the
+   player can still edit their typed input normally. */
+body.player input,
+body.player textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 
 /* Reaction bar (lobby/reveal/final phases only) */
 .reaction-bar {

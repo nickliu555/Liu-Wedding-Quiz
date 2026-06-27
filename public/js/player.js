@@ -1323,4 +1323,24 @@
     lastRender = null;
     render('<h2 class="serif">' + t('reconnecting') + '</h2><p>' + t('dontRefresh') + '</p>');
   });
+
+  // ---------------- App-like gesture suppression ----------------
+  // CSS `touch-action: manipulation` is supposed to disable double-tap
+  // zoom, but iOS Safari has a long-standing bug where it still zooms on a
+  // quick double-tap. Belt-and-suspenders: cancel the second tap of any
+  // double-tap that lands within 300ms, and block iOS pinch-zoom gestures,
+  // so the player screen behaves like a native app.
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', function (e) {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  // iOS-only pinch/zoom gesture events. Harmless no-ops elsewhere.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (evt) {
+    document.addEventListener(evt, function (e) { e.preventDefault(); }, { passive: false });
+  });
 })();
